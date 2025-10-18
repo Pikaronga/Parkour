@@ -91,6 +91,10 @@ public class SessionManager {
         } else {
             session.getPlayer().sendMessage("§cYou have left the parkour.");
         }
+        Location completionSpawn = session.getCourse().getFinishTeleport();
+        if (completionSpawn != null) {
+            session.getPlayer().teleport(completionSpawn);
+        }
     }
 
     public long completeSession(Player player) {
