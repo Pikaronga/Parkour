@@ -1,18 +1,25 @@
-Please add a parkour part of the plugin, what features we want: 
+# Parkour Plugin
 
-1. We want to have pressureplates that we define as starting point, when the player steps on it they are turned into parkour mode, all effects should be removed from the player so they are in "vanilla" conditions. 
+This plugin adds a fully managed parkour system featuring:
 
-2. We want pressureplates that act as "check-points", when a player reaches one they get teleported to that checkpoint if they fall down from the parkour. 
+- **Start plates** that place players into parkour mode with a clean state.
+- **Checkpoint plates** that update the player's return location if they fall.
+- **Finish plates** that record completion times and teleport players to a configured spawn.
+- **Custom parkour inventory** with restart, checkpoint, and leave tools.
+- **Top 10 holograms** showing the best overall runs for the parkour.
+- **Personal best holograms** that dynamically display the nearest player's best time.
+- **Persistent storage** of parkour configuration and completion history in `parkours.yml`.
 
-3. We want a custom inventory for when a player enters a parkour so they get items to restart the parkour and get teleported to the defined parkour start. This also resets their timer. Another item to get teleported back to the latest checkpoint. 
+## Commands
 
-4. We want to have holos for the "Top Times and Players" that have completed the parkour, players can have multiple times on the scoreboard, but it goes for the best one on the holo. We also want "Your current best time:" Holo which we can also place close to the parkour so you can see how close you are to bneing in the top 10. 
+All commands require `parkour.admin`.
 
-5. A good way to store the times from the different parkours. 
+```
+/parkour setstart <name>       # Set the start pressure plate and teleport location
+/parkour setspawn <name>       # Set the finish pressure plate and completion teleport
+/parkour setcheckpoint <name>  # Add a checkpoint pressure plate at your location
+/parkour setholotop10 <name>   # Place the Top 10 hologram above your position
+/parkour setholobest <name>    # Place the personal best hologram above your position
+```
 
-6. Here are examples of some commands. 
-/parkour setstart (parkour)  
-/parkour setspawn (parkour)
-/parkour setcheckpoint (parkour) 
-/parkour setholotop10 (parkour) 
-/parkour setholobest (parkour) - this shows the personal best time for the player. (individual) 
+After configuring a course, players can step on the start plate to begin a timed run with checkpoints and holographic leaderboards.
