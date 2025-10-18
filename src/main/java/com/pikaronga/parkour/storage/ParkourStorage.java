@@ -84,6 +84,10 @@ public class ParkourStorage {
                         long time = playerSection.getLong(index);
                         entries.add(time);
                     }
+                    entries.sort(Long::compareTo);
+                    if (entries.size() > 3) {
+                        entries = new ArrayList<>(entries.subList(0, 3));
+                    }
                     course.getTimes().put(uuid, entries);
                 }
             }
@@ -128,8 +132,10 @@ public class ParkourStorage {
                 ConfigurationSection timesSection = section.createSection("times");
                 for (Map.Entry<UUID, List<Long>> entry : course.getTimes().entrySet()) {
                     ConfigurationSection playerSection = timesSection.createSection(entry.getKey().toString());
+                    List<Long> sorted = new ArrayList<>(entry.getValue());
+                    sorted.sort(Long::compareTo);
                     int index = 0;
-                    for (Long time : entry.getValue()) {
+                    for (Long time : sorted) {
                         playerSection.set(String.valueOf(index++), time);
                     }
                 }
