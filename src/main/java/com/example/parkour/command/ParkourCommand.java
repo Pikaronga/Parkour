@@ -42,7 +42,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /parkour <setstart|setspawn|setcheckpoint|setholotop10|setholobest> <name>");
+            player.sendMessage("§cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest> <name>");
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -51,7 +51,8 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         boolean success = true;
         switch (sub) {
             case "setstart" -> handleSetStart(player, course);
-            case "setspawn" -> handleSetFinish(player, course);
+            case "setend" -> handleSetEnd(player, course);
+            case "setspawn" -> handleSetSpawn(player, course);
             case "setcheckpoint" -> handleSetCheckpoint(player, course);
             case "setholotop10" -> handleSetTopHolo(player, course);
             case "setholobest" -> handleSetBestHolo(player, course);
@@ -77,15 +78,19 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("§aSet start plate for parkour §f" + course.getName() + "§a.");
     }
 
-    private void handleSetFinish(Player player, ParkourCourse course) {
+    private void handleSetEnd(Player player, ParkourCourse course) {
         Block block = getTargetPressurePlate(player);
         if (block == null) {
-            player.sendMessage("§cLook at a pressure plate to set the finish.");
+            player.sendMessage("§cLook at a pressure plate to set the end.");
             return;
         }
         course.setFinishPlate(block.getLocation());
+        player.sendMessage("§aSet end plate for parkour §f" + course.getName() + "§a.");
+    }
+
+    private void handleSetSpawn(Player player, ParkourCourse course) {
         course.setFinishTeleport(player.getLocation());
-        player.sendMessage("§aSet finish plate for parkour §f" + course.getName() + "§a.");
+        player.sendMessage("§aSet completion spawn for parkour §f" + course.getName() + "§a.");
     }
 
     private void handleSetCheckpoint(Player player, ParkourCourse course) {
@@ -128,7 +133,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("setstart", "setspawn", "setcheckpoint", "setholotop10", "setholobest");
+            return Arrays.asList("setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest");
         }
         if (args.length == 2) {
             return new ArrayList<>(parkourManager.getCourseNames());
