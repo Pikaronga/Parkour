@@ -1,7 +1,7 @@
-package com.example.parkour.util;
+package com.pikaronga.parkour.util;
 
-import com.example.parkour.course.Checkpoint;
-import com.example.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.course.Checkpoint;
+import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.block.Block;
 
 import java.util.Collection;

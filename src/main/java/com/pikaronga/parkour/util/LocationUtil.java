@@ -1,4 +1,4 @@
-package com.example.parkour.util;
+package com.pikaronga.parkour.util;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;

@@ -1,6 +1,6 @@
-package com.example.parkour.course;
+package com.pikaronga.parkour.course;
 
-import com.example.parkour.util.TimeUtil;
+import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 

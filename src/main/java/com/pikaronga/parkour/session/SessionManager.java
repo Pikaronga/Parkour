@@ -1,8 +1,8 @@
-package com.example.parkour.session;
+package com.pikaronga.parkour.session;
 
-import com.example.parkour.ParkourPlugin;
-import com.example.parkour.course.ParkourCourse;
-import com.example.parkour.util.TimeUtil;
+import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
