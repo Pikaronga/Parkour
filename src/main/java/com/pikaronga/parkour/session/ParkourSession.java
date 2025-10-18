@@ -1,6 +1,6 @@
-package com.example.parkour.session;
+package com.pikaronga.parkour.session;
 
-import com.example.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;

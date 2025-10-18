@@ -1,11 +1,11 @@
-package com.example.parkour;
+package com.pikaronga.parkour;
 
-import com.example.parkour.command.ParkourCommand;
-import com.example.parkour.hologram.HologramManager;
-import com.example.parkour.listener.ParkourListener;
-import com.example.parkour.session.SessionManager;
-import com.example.parkour.storage.ParkourStorage;
-import com.example.parkour.util.ParkourManager;
+import com.pikaronga.parkour.command.ParkourCommand;
+import com.pikaronga.parkour.hologram.HologramManager;
+import com.pikaronga.parkour.listener.ParkourListener;
+import com.pikaronga.parkour.session.SessionManager;
+import com.pikaronga.parkour.storage.ParkourStorage;
+import com.pikaronga.parkour.util.ParkourManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 

@@ -1,4 +1,4 @@
-package com.example.parkour.util;
+package com.pikaronga.parkour.util;
 
 import java.time.Duration;
 

@@ -1,4 +1,4 @@
-package com.example.parkour.hologram;
+package com.pikaronga.parkour.hologram;
 
 import org.bukkit.Location;
 import org.bukkit.World;

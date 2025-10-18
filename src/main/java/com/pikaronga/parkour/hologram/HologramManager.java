@@ -1,8 +1,8 @@
-package com.example.parkour.hologram;
+package com.pikaronga.parkour.hologram;
 
-import com.example.parkour.ParkourPlugin;
-import com.example.parkour.course.ParkourCourse;
-import com.example.parkour.util.TimeUtil;
+import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -15,12 +15,12 @@ import java.util.Map;
 public class HologramManager {
 
     private final ParkourPlugin plugin;
-    private final com.example.parkour.util.ParkourManager parkourManager;
+    private final com.pikaronga.parkour.util.ParkourManager parkourManager;
     private final Map<String, Hologram> topHolograms = new HashMap<>();
     private final Map<String, Hologram> bestHolograms = new HashMap<>();
     private BukkitTask task;
 
-    public HologramManager(ParkourPlugin plugin, com.example.parkour.util.ParkourManager parkourManager) {
+    public HologramManager(ParkourPlugin plugin, com.pikaronga.parkour.util.ParkourManager parkourManager) {
         this.plugin = plugin;
         this.parkourManager = parkourManager;
     }

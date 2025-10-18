@@ -1,10 +1,10 @@
-package com.example.parkour.command;
+package com.pikaronga.parkour.command;
 
-import com.example.parkour.ParkourPlugin;
-import com.example.parkour.course.Checkpoint;
-import com.example.parkour.course.ParkourCourse;
-import com.example.parkour.hologram.HologramManager;
-import com.example.parkour.util.ParkourManager;
+import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.course.Checkpoint;
+import com.pikaronga.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.hologram.HologramManager;
+import com.pikaronga.parkour.util.ParkourManager;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;

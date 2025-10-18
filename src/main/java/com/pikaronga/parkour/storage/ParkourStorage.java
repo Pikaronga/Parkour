@@ -1,9 +1,9 @@
-package com.example.parkour.storage;
+package com.pikaronga.parkour.storage;
 
-import com.example.parkour.ParkourPlugin;
-import com.example.parkour.course.Checkpoint;
-import com.example.parkour.course.ParkourCourse;
-import com.example.parkour.util.LocationUtil;
+import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.course.Checkpoint;
+import com.pikaronga.parkour.course.ParkourCourse;
+import com.pikaronga.parkour.util.LocationUtil;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
