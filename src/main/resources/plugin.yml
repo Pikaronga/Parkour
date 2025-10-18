@@ -1,0 +1,14 @@
+name: Parkour
+main: com.example.parkour.ParkourPlugin
+version: 1.0.0
+author: OpenAI
+api-version: 1.20
+commands:
+  parkour:
+    description: Parkour management commands
+    usage: /parkour <subcommand>
+    permission: parkour.admin
+permissions:
+  parkour.admin:
+    description: Allows management of parkours
+    default: op
