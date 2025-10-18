@@ -35,6 +35,7 @@ public class ParkourStorage {
             return new ArrayList<>();
         }
         FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        int version = config.getInt("version", 1);
         ConfigurationSection parkours = config.getConfigurationSection("parkours");
         List<ParkourCourse> courses = new ArrayList<>();
         if (parkours == null) {
@@ -82,6 +83,9 @@ public class ParkourStorage {
                     }
                     for (String index : playerSection.getKeys(false)) {
                         long time = playerSection.getLong(index);
+                        if (version < 2) {
+                            time *= 1_000_000L;
+                        }
                         entries.add(time);
                     }
                     entries.sort(Long::compareTo);
@@ -98,6 +102,7 @@ public class ParkourStorage {
 
     public void saveCourses(Map<String, ParkourCourse> courses) {
         FileConfiguration config = new YamlConfiguration();
+        config.set("version", 2);
         ConfigurationSection parkours = config.createSection("parkours");
         for (ParkourCourse course : courses.values()) {
             ConfigurationSection section = parkours.createSection(course.getName());

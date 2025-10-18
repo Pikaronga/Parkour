@@ -11,7 +11,7 @@ public class ParkourSession {
 
     private final Player player;
     private final ParkourCourse course;
-    private long startTime;
+    private long startTimeNanos;
     private Location lastCheckpoint;
     private ItemStack[] contents;
     private ItemStack[] armor;
@@ -23,7 +23,7 @@ public class ParkourSession {
         this.player = player;
         this.course = course;
         this.lastCheckpoint = startLocation != null ? startLocation.clone() : null;
-        this.startTime = System.currentTimeMillis();
+        this.startTimeNanos = System.nanoTime();
     }
 
     public Player getPlayer() {
@@ -34,12 +34,12 @@ public class ParkourSession {
         return course;
     }
 
-    public long getStartTime() {
-        return startTime;
+    public long getStartTimeNanos() {
+        return startTimeNanos;
     }
 
     public void resetTimer() {
-        this.startTime = System.currentTimeMillis();
+        this.startTimeNanos = System.nanoTime();
     }
 
     public Location getLastCheckpoint() {
