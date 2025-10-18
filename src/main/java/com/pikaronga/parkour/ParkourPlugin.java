@@ -30,6 +30,7 @@ public class ParkourPlugin extends JavaPlugin {
         }
 
         Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager), this);
+        Bukkit.getPluginManager().registerEvents(hologramManager, this);
 
         hologramManager.spawnConfiguredHolograms();
         getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");

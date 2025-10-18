@@ -98,7 +98,12 @@ public class ParkourCourse {
     }
 
     public void addTime(UUID playerId, long time) {
-        times.computeIfAbsent(playerId, key -> new ArrayList<>()).add(time);
+        List<Long> playerTimes = times.computeIfAbsent(playerId, key -> new ArrayList<>());
+        playerTimes.add(time);
+        playerTimes.sort(Long::compareTo);
+        if (playerTimes.size() > 3) {
+            playerTimes.subList(3, playerTimes.size()).clear();
+        }
     }
 
     public long getBestTime(UUID playerId) {
