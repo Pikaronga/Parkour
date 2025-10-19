@@ -86,8 +86,8 @@ public class SessionManager {
     private void endSession(ParkourSession session, boolean completed) {
         session.restoreInventory();
         if (completed) {
-            long duration = System.currentTimeMillis() - session.getStartTime();
-            session.getPlayer().sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(duration) + "§a!");
+            long durationNanos = System.nanoTime() - session.getStartTimeNanos();
+            session.getPlayer().sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(durationNanos) + "§a!");
         } else {
             session.getPlayer().sendMessage("§cYou have left the parkour.");
         }
@@ -103,15 +103,15 @@ public class SessionManager {
             return -1L;
         }
         session.restoreInventory();
-        long duration = System.currentTimeMillis() - session.getStartTime();
-        session.getCourse().addTime(player.getUniqueId(), duration);
+        long durationNanos = System.nanoTime() - session.getStartTimeNanos();
+        session.getCourse().addTime(player.getUniqueId(), durationNanos);
         if (session.getCourse().getFinishTeleport() != null) {
             player.teleport(session.getCourse().getFinishTeleport());
         }
-        player.sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(duration) + "§a!");
+        player.sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(durationNanos) + "§a!");
         plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
         plugin.getHologramManager().updateHolograms(session.getCourse());
-        return duration;
+        return durationNanos;
     }
 
     public ParkourSession getSession(Player player) {
