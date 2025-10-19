@@ -33,6 +33,13 @@ public class SessionManager {
             startTeleport = course.getStartPlate().clone().add(0.5, 0, 0.5);
         }
         if (existing != null && existing.getCourse().equals(course)) {
+            existing.restoreInventory();
+            existing.captureInventory();
+            existing.clearEffects();
+            player.setAllowFlight(false);
+            player.setFlying(false);
+            player.setGameMode(org.bukkit.GameMode.ADVENTURE);
+            giveParkourItems(player);
             if (startTeleport != null) {
                 player.teleport(startTeleport);
                 existing.setLastCheckpoint(startTeleport);
