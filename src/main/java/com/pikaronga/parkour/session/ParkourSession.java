@@ -18,6 +18,7 @@ public class ParkourSession {
     private ItemStack offHand;
     private GameMode originalGameMode;
     private boolean originalAllowFlight;
+    private boolean ignoreNextStartPlate;
 
     public ParkourSession(Player player, ParkourCourse course, Location startLocation) {
         this.player = player;
@@ -83,5 +84,17 @@ public class ParkourSession {
         player.setSaturation(5f);
         player.setFallDistance(0f);
         player.setHealth(player.getMaxHealth());
+    }
+
+    public void markIgnoreNextStartPlate() {
+        this.ignoreNextStartPlate = true;
+    }
+
+    public boolean consumeIgnoreNextStartPlate() {
+        if (!ignoreNextStartPlate) {
+            return false;
+        }
+        ignoreNextStartPlate = false;
+        return true;
     }
 }

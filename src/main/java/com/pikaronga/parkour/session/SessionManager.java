@@ -27,13 +27,30 @@ public class SessionManager {
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course) {
-        ParkourSession existing = sessions.remove(player.getUniqueId());
-        if (existing != null) {
-            endSession(existing, false);
-        }
+        ParkourSession existing = sessions.get(player.getUniqueId());
         Location startTeleport = course.getStartTeleport();
         if (startTeleport == null && course.getStartPlate() != null) {
             startTeleport = course.getStartPlate().clone().add(0.5, 0, 0.5);
+        }
+        if (existing != null && existing.getCourse().equals(course)) {
+            existing.restoreInventory();
+            existing.captureInventory();
+            existing.clearEffects();
+            player.setAllowFlight(false);
+            player.setFlying(false);
+            player.setGameMode(org.bukkit.GameMode.ADVENTURE);
+            giveParkourItems(player);
+            if (startTeleport != null) {
+                player.teleport(startTeleport);
+                existing.setLastCheckpoint(startTeleport);
+            }
+            existing.resetTimer();
+            player.sendMessage("§aRestarted the parkour and reset your timer.");
+            return existing;
+        }
+        if (existing != null) {
+            sessions.remove(player.getUniqueId());
+            endSession(existing, false);
         }
         ParkourSession session = new ParkourSession(player, course, startTeleport);
         session.captureInventory();
@@ -129,6 +146,7 @@ public class SessionManager {
             player.sendMessage("§cStart location is not configured.");
             return;
         }
+        session.markIgnoreNextStartPlate();
         player.teleport(start);
         session.setLastCheckpoint(start);
         session.resetTimer();
