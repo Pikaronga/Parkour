@@ -12,11 +12,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -37,6 +39,9 @@ public class ParkourListener implements Listener {
 
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
+        if (event.getHand() != null && event.getHand() == EquipmentSlot.OFF_HAND) {
+            return;
+        }
         if (event.getAction() == Action.PHYSICAL && event.getClickedBlock() != null) {
             Material type = event.getClickedBlock().getType();
             if (!isPressurePlate(type)) {
@@ -66,6 +71,10 @@ public class ParkourListener implements Listener {
         parkourManager.findCourseByStart(block).ifPresent(course -> {
             if (course.getStartTeleport() == null) {
                 course.setStartTeleport(blockLocation.clone().add(0.5, 0, 0.5));
+            }
+            ParkourSession session = sessionManager.getSession(player);
+            if (session != null && session.getCourse().equals(course) && session.consumeIgnoreNextStartPlate()) {
+                return;
             }
             sessionManager.startSession(player, course);
         });
@@ -165,6 +174,17 @@ public class ParkourListener implements Listener {
         if (getAction(event.getItemDrop().getItemStack()) != null) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler
+    public void onCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        ParkourSession session = sessionManager.getSession(player);
+        if (session == null) {
+            return;
+        }
+        player.sendMessage("§cYou cannot use commands while in a parkour.");
+        event.setCancelled(true);
     }
 
     private boolean isPressurePlate(Material material) {
