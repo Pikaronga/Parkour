@@ -109,10 +109,6 @@ public class ParkourListener implements Listener {
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        ParkourSession session = sessionManager.getSession(player);
-        if (session == null) {
-            return;
-        }
         Location to = event.getTo();
         if (to == null) {
             return;
@@ -126,12 +122,12 @@ public class ParkourListener implements Listener {
                 org.bukkit.block.Block toBlock = to.getBlock();
                 if (isPressurePlate(toBlock.getType())) {
                     handlePressurePlate(player, toBlock.getLocation());
-                    session = sessionManager.getSession(player);
-                    if (session == null) {
-                        return;
-                    }
                 }
             }
+        }
+        ParkourSession session = sessionManager.getSession(player);
+        if (session == null) {
+            return;
         }
         Location checkpoint = session.getLastCheckpoint();
         if (checkpoint == null) {
