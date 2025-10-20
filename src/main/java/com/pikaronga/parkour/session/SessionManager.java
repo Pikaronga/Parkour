@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.session;
 
 import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Location;
@@ -20,10 +21,12 @@ public class SessionManager {
     private final ParkourPlugin plugin;
     private final Map<UUID, ParkourSession> sessions = new HashMap<>();
     private final NamespacedKey actionKey;
+    private final MessageManager messageManager;
 
-    public SessionManager(ParkourPlugin plugin) {
+    public SessionManager(ParkourPlugin plugin, MessageManager messageManager) {
         this.plugin = plugin;
         this.actionKey = new NamespacedKey(plugin, "parkour-action");
+        this.messageManager = messageManager;
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course) {
@@ -45,7 +48,7 @@ public class SessionManager {
                 existing.setLastCheckpoint(startTeleport);
             }
             existing.resetTimer();
-            player.sendMessage("§aRestarted the parkour and reset your timer.");
+            player.sendMessage(messageManager.getMessage("restart-parkour", "&aRestarted the parkour and reset your timer."));
             return existing;
         }
         if (existing != null) {
@@ -64,16 +67,28 @@ public class SessionManager {
             session.setLastCheckpoint(startTeleport);
         }
         sessions.put(player.getUniqueId(), session);
-        player.sendMessage("§aStarted parkour §f" + course.getName() + "§a! Good luck.");
+        player.sendMessage(messageManager.getMessage("started-parkour", "&aStarted parkour &f{course}&a! Good luck.", java.util.Map.of("course", course.getName())));
         return session;
     }
 
     private void giveParkourItems(Player player) {
         player.getInventory().clear();
         player.getInventory().setHeldItemSlot(0);
-        player.getInventory().setItem(0, createItem(Material.SLIME_BALL, "§aRestart Parkour", "§7Return to start and reset timer", "restart"));
-        player.getInventory().setItem(1, createItem(Material.ENDER_PEARL, "§bLast Checkpoint", "§7Teleport back to your latest checkpoint", "checkpoint"));
-        player.getInventory().setItem(8, createItem(Material.RED_BED, "§cLeave Parkour", "§7Exit parkour mode", "leave"));
+        player.getInventory().setItem(0, createItem(
+                Material.SLIME_BALL,
+                messageManager.getItemName("restart", "&aRestart Parkour"),
+                messageManager.getItemLore("restart", "&7Return to start and reset timer"),
+                "restart"));
+        player.getInventory().setItem(1, createItem(
+                Material.ENDER_PEARL,
+                messageManager.getItemName("checkpoint", "&bLast Checkpoint"),
+                messageManager.getItemLore("checkpoint", "&7Teleport back to your latest checkpoint"),
+                "checkpoint"));
+        player.getInventory().setItem(8, createItem(
+                Material.RED_BED,
+                messageManager.getItemName("leave", "&cLeave Parkour"),
+                messageManager.getItemLore("leave", "&7Exit parkour mode"),
+                "leave"));
     }
 
     private ItemStack createItem(Material material, String name, String lore, String action) {
@@ -104,9 +119,9 @@ public class SessionManager {
         session.restoreInventory();
         if (completed) {
             long durationNanos = System.nanoTime() - session.getStartTimeNanos();
-            session.getPlayer().sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(durationNanos) + "§a!");
+            session.getPlayer().sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
         } else {
-            session.getPlayer().sendMessage("§cYou have left the parkour.");
+            session.getPlayer().sendMessage(messageManager.getMessage("left-parkour", "&cYou have left the parkour."));
         }
         Location completionSpawn = session.getCourse().getFinishTeleport();
         if (completionSpawn != null) {
@@ -125,7 +140,7 @@ public class SessionManager {
         if (session.getCourse().getFinishTeleport() != null) {
             player.teleport(session.getCourse().getFinishTeleport());
         }
-        player.sendMessage("§aParkour completed in §e" + TimeUtil.formatDuration(durationNanos) + "§a!");
+        player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
         plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
         plugin.getHologramManager().updateHolograms(session.getCourse());
         return durationNanos;
@@ -138,34 +153,34 @@ public class SessionManager {
     public void resetToStart(Player player) {
         ParkourSession session = getSession(player);
         if (session == null) {
-            player.sendMessage("§cYou are not in a parkour.");
+            player.sendMessage(messageManager.getMessage("not-in-parkour", "&cYou are not in a parkour."));
             return;
         }
         Location start = session.getCourse().getStartTeleport();
         if (start == null) {
-            player.sendMessage("§cStart location is not configured.");
+            player.sendMessage(messageManager.getMessage("start-not-configured", "&cStart location is not configured."));
             return;
         }
         session.markIgnoreNextStartPlate();
         player.teleport(start);
         session.setLastCheckpoint(start);
         session.resetTimer();
-        player.sendMessage("§aRestarted the parkour and reset your timer.");
+        player.sendMessage(messageManager.getMessage("restart-parkour", "&aRestarted the parkour and reset your timer."));
     }
 
     public void teleportToCheckpoint(Player player) {
         ParkourSession session = getSession(player);
         if (session == null) {
-            player.sendMessage("§cYou are not in a parkour.");
+            player.sendMessage(messageManager.getMessage("not-in-parkour", "&cYou are not in a parkour."));
             return;
         }
         Location checkpoint = session.getLastCheckpoint();
         if (checkpoint == null) {
-            player.sendMessage("§cNo checkpoint available.");
+            player.sendMessage(messageManager.getMessage("no-checkpoint", "&cNo checkpoint available."));
             return;
         }
         player.teleport(checkpoint);
-        player.sendMessage("§aTeleported to your latest checkpoint.");
+        player.sendMessage(messageManager.getMessage("teleported-checkpoint", "&aTeleported to your latest checkpoint."));
     }
 
     public void endAllSessions() {

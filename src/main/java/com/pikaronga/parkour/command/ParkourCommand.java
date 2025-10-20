@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.command;
 
 import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.course.Checkpoint;
 import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.hologram.HologramManager;
@@ -24,25 +25,27 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     private final ParkourPlugin plugin;
     private final ParkourManager parkourManager;
     private final HologramManager hologramManager;
+    private final MessageManager messageManager;
 
-    public ParkourCommand(ParkourPlugin plugin, ParkourManager parkourManager, HologramManager hologramManager) {
+    public ParkourCommand(ParkourPlugin plugin, ParkourManager parkourManager, HologramManager hologramManager, MessageManager messageManager) {
         this.plugin = plugin;
         this.parkourManager = parkourManager;
         this.hologramManager = hologramManager;
+        this.messageManager = messageManager;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Only players can use this command.");
+            sender.sendMessage(messageManager.getMessage("only-players", "Only players can use this command."));
             return true;
         }
         if (!player.hasPermission("parkour.admin")) {
-            player.sendMessage("§cYou do not have permission to use this command.");
+            player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
             return true;
         }
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest> <name>");
+            player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest> <name>"));
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -57,7 +60,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             case "setholotop10" -> handleSetTopHolo(player, course);
             case "setholobest" -> handleSetBestHolo(player, course);
             default -> {
-                player.sendMessage("§cUnknown subcommand.");
+                player.sendMessage(messageManager.getMessage("unknown-subcommand", "&cUnknown subcommand."));
                 success = false;
             }
         }
@@ -70,49 +73,49 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     private void handleSetStart(Player player, ParkourCourse course) {
         Block block = getTargetPressurePlate(player);
         if (block == null) {
-            player.sendMessage("§cLook at a pressure plate to set the start.");
+            player.sendMessage(messageManager.getMessage("look-at-plate-start", "&cLook at a pressure plate to set the start."));
             return;
         }
         course.setStartPlate(block.getLocation());
         course.setStartTeleport(player.getLocation());
-        player.sendMessage("§aSet start plate for parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("set-start-plate", "&aSet start plate for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private void handleSetEnd(Player player, ParkourCourse course) {
         Block block = getTargetPressurePlate(player);
         if (block == null) {
-            player.sendMessage("§cLook at a pressure plate to set the end.");
+            player.sendMessage(messageManager.getMessage("look-at-plate-end", "&cLook at a pressure plate to set the end."));
             return;
         }
         course.setFinishPlate(block.getLocation());
-        player.sendMessage("§aSet end plate for parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("set-end-plate", "&aSet end plate for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private void handleSetSpawn(Player player, ParkourCourse course) {
         course.setFinishTeleport(player.getLocation());
-        player.sendMessage("§aSet completion spawn for parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("set-completion-spawn", "&aSet completion spawn for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private void handleSetCheckpoint(Player player, ParkourCourse course) {
         Block block = getTargetPressurePlate(player);
         if (block == null) {
-            player.sendMessage("§cLook at a pressure plate to add a checkpoint.");
+            player.sendMessage(messageManager.getMessage("look-at-plate-checkpoint", "&cLook at a pressure plate to add a checkpoint."));
             return;
         }
         course.addCheckpoint(new Checkpoint(block.getLocation(), player.getLocation()));
-        player.sendMessage("§aAdded checkpoint to parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("checkpoint-added", "&aAdded checkpoint to parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private void handleSetTopHolo(Player player, ParkourCourse course) {
         Location location = player.getLocation().clone().add(0, 2, 0);
         hologramManager.setTopHologram(course, location);
-        player.sendMessage("§aSet top times hologram for parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("set-top-holo", "&aSet top times hologram for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private void handleSetBestHolo(Player player, ParkourCourse course) {
         Location location = player.getLocation().clone().add(0, 2, 0);
         hologramManager.setBestHologram(course, location);
-        player.sendMessage("§aSet personal best hologram for parkour §f" + course.getName() + "§a.");
+        player.sendMessage(messageManager.getMessage("set-best-holo", "&aSet personal best hologram for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
     }
 
     private Block getTargetPressurePlate(Player player) {

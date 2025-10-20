@@ -1,0 +1,8 @@
+top:
+  header: "&aTop Parkour Times"
+  empty: "&7No completions yet."
+  entry: "&b{position}. &f{name} &7- &e{time}"
+personal-best:
+  header: "&eYour current best time:"
+  empty: "&7No time recorded."
+  entry: "&f{name} &7- &a{time}"

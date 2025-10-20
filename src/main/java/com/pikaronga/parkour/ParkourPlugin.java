@@ -1,6 +1,8 @@
 package com.pikaronga.parkour;
 
 import com.pikaronga.parkour.command.ParkourCommand;
+import com.pikaronga.parkour.config.HologramTextProvider;
+import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.hologram.HologramManager;
 import com.pikaronga.parkour.listener.ParkourListener;
 import com.pikaronga.parkour.session.SessionManager;
@@ -15,21 +17,25 @@ public class ParkourPlugin extends JavaPlugin {
     private ParkourManager parkourManager;
     private SessionManager sessionManager;
     private HologramManager hologramManager;
+    private MessageManager messageManager;
+    private HologramTextProvider hologramTextProvider;
 
     @Override
     public void onEnable() {
         this.storage = new ParkourStorage(this);
         this.parkourManager = new ParkourManager(storage.loadCourses());
-        this.sessionManager = new SessionManager(this);
-        this.hologramManager = new HologramManager(this, parkourManager);
+        this.messageManager = new MessageManager(this);
+        this.hologramTextProvider = new HologramTextProvider(this);
+        this.sessionManager = new SessionManager(this, messageManager);
+        this.hologramManager = new HologramManager(this, parkourManager, hologramTextProvider);
 
-        ParkourCommand command = new ParkourCommand(this, parkourManager, hologramManager);
+        ParkourCommand command = new ParkourCommand(this, parkourManager, hologramManager, messageManager);
         if (getCommand("parkour") != null) {
             getCommand("parkour").setExecutor(command);
             getCommand("parkour").setTabCompleter(command);
         }
 
-        Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager), this);
+        Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager, messageManager), this);
         Bukkit.getPluginManager().registerEvents(hologramManager, this);
 
         hologramManager.spawnConfiguredHolograms();
@@ -63,5 +69,13 @@ public class ParkourPlugin extends JavaPlugin {
 
     public HologramManager getHologramManager() {
         return hologramManager;
+    }
+
+    public MessageManager getMessageManager() {
+        return messageManager;
+    }
+
+    public HologramTextProvider getHologramTextProvider() {
+        return hologramTextProvider;
     }
 }

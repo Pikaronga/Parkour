@@ -1,5 +1,6 @@
 package com.pikaronga.parkour.course;
 
+import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -120,12 +121,12 @@ public class ParkourCourse {
                 .collect(Collectors.toList());
     }
 
-    public List<String> createTopLines() {
+    public List<String> createTopLines(HologramTextProvider textProvider) {
         List<Map.Entry<UUID, Long>> top = getTopTimes(10);
         List<String> lines = new ArrayList<>();
-        lines.add("§aTop Parkour Times");
+        lines.add(textProvider.formatTopHeader(getName()));
         if (top.isEmpty()) {
-            lines.add("§7No completions yet.");
+            lines.add(textProvider.formatTopEmpty(getName()));
             return lines;
         }
         for (int i = 0; i < top.size(); i++) {
@@ -134,7 +135,7 @@ public class ParkourCourse {
             if (name == null || name.isBlank()) {
                 name = entry.getKey().toString().substring(0, 8);
             }
-            lines.add("§b" + (i + 1) + ". §f" + name + " §7- §e" + TimeUtil.formatDuration(entry.getValue()));
+            lines.add(textProvider.formatTopEntry(i + 1, name, TimeUtil.formatDuration(entry.getValue()), getName()));
         }
         return lines;
     }

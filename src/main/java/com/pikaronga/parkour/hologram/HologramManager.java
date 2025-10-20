@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.hologram;
 
 import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -18,24 +19,26 @@ public class HologramManager implements Listener {
 
     private final ParkourPlugin plugin;
     private final com.pikaronga.parkour.util.ParkourManager parkourManager;
+    private final HologramTextProvider textProvider;
     private final Map<String, Hologram> topHolograms = new HashMap<>();
     private final Map<String, PersonalBestHologram> bestHolograms = new HashMap<>();
     private BukkitTask task;
 
-    public HologramManager(ParkourPlugin plugin, com.pikaronga.parkour.util.ParkourManager parkourManager) {
+    public HologramManager(ParkourPlugin plugin, com.pikaronga.parkour.util.ParkourManager parkourManager, HologramTextProvider textProvider) {
         this.plugin = plugin;
         this.parkourManager = parkourManager;
+        this.textProvider = textProvider;
     }
 
     public void spawnConfiguredHolograms() {
         for (ParkourCourse course : parkourManager.getCourses().values()) {
             if (course.getTopHologramLocation() != null) {
                 Hologram hologram = new Hologram(course.getTopHologramLocation());
-                hologram.spawn(course.createTopLines());
+                hologram.spawn(course.createTopLines(textProvider));
                 topHolograms.put(course.getName().toLowerCase(), hologram);
             }
             if (course.getBestHologramLocation() != null) {
-                PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, course.getBestHologramLocation());
+                PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, course.getBestHologramLocation(), textProvider);
                 bestHolograms.put(course.getName().toLowerCase(), hologram);
             }
         }
@@ -45,7 +48,7 @@ public class HologramManager implements Listener {
     public void updateHolograms(ParkourCourse course) {
         Hologram top = topHolograms.get(course.getName().toLowerCase());
         if (top != null) {
-            top.update(course.createTopLines());
+            top.update(course.createTopLines(textProvider));
         }
         PersonalBestHologram best = bestHolograms.get(course.getName().toLowerCase());
         if (best != null) {
@@ -55,7 +58,7 @@ public class HologramManager implements Listener {
 
     public void setTopHologram(ParkourCourse course, Location location) {
         Hologram hologram = new Hologram(location);
-        hologram.spawn(course.createTopLines());
+        hologram.spawn(course.createTopLines(textProvider));
         Hologram existing = topHolograms.put(course.getName().toLowerCase(), hologram);
         if (existing != null) {
             existing.despawn();
@@ -64,7 +67,7 @@ public class HologramManager implements Listener {
     }
 
     public void setBestHologram(ParkourCourse course, Location location) {
-        PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location);
+        PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location, textProvider);
         PersonalBestHologram existing = bestHolograms.put(course.getName().toLowerCase(), hologram);
         if (existing != null) {
             existing.destroy();
