@@ -1,7 +1,7 @@
 messages:
   only-players: "&cOnly players can use this command."
   no-permission: "&cYou do not have permission to use this command."
-  usage: "&cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest> <name>"
+  usage: "&cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest|setmaxfall> <name> [value]"
   unknown-subcommand: "&cUnknown subcommand."
   look-at-plate-start: "&cLook at a pressure plate to set the start."
   set-start-plate: "&aSet start plate for parkour &f{course}&a."
@@ -12,6 +12,9 @@ messages:
   checkpoint-added: "&aAdded checkpoint to parkour &f{course}&a."
   set-top-holo: "&aSet top times hologram for parkour &f{course}&a."
   set-best-holo: "&aSet personal best hologram for parkour &f{course}&a."
+  setmaxfall-usage: "&cUsage: /parkour setmaxfall <name> <distance>"
+  invalid-max-fall: "&cPlease provide a valid non-negative number for max fall distance."
+  set-max-fall: "&aSet max fall distance for parkour &f{course}&a to &f{distance}&a."
   checkpoint-reached: "&aCheckpoint reached!"
   fell-teleport: "&cYou fell! Teleporting to your checkpoint."
   command-blocked: "&cYou cannot use commands while in a parkour."

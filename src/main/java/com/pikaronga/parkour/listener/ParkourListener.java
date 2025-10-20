@@ -133,7 +133,8 @@ public class ParkourListener implements Listener {
         if (checkpoint == null) {
             return;
         }
-        if (to.getY() < checkpoint.getY() - 6) {
+        double maxFallDistance = session.getCourse().getMaxFallDistance();
+        if (to.getY() < checkpoint.getY() - maxFallDistance) {
             player.teleport(checkpoint);
             player.sendMessage(messageManager.getMessage("fell-teleport", "&cYou fell! Teleporting to your checkpoint."));
         }
