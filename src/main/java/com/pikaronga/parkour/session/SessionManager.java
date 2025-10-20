@@ -30,6 +30,10 @@ public class SessionManager {
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course) {
+        return startSession(player, course, true);
+    }
+
+    public ParkourSession startSession(Player player, ParkourCourse course, boolean teleportToStart) {
         ParkourSession existing = sessions.get(player.getUniqueId());
         Location startTeleport = course.getStartTeleport();
         if (startTeleport == null && course.getStartPlate() != null) {
@@ -44,7 +48,9 @@ public class SessionManager {
             player.setGameMode(org.bukkit.GameMode.ADVENTURE);
             giveParkourItems(player);
             if (startTeleport != null) {
-                player.teleport(startTeleport);
+                if (teleportToStart) {
+                    player.teleport(startTeleport);
+                }
                 existing.setLastCheckpoint(startTeleport);
             }
             existing.resetTimer();
@@ -63,7 +69,9 @@ public class SessionManager {
         player.setGameMode(org.bukkit.GameMode.ADVENTURE);
         giveParkourItems(player);
         if (startTeleport != null) {
-            player.teleport(startTeleport);
+            if (teleportToStart) {
+                player.teleport(startTeleport);
+            }
             session.setLastCheckpoint(startTeleport);
         }
         sessions.put(player.getUniqueId(), session);

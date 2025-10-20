@@ -80,7 +80,7 @@ public class ParkourListener implements Listener {
             if (session != null && session.getCourse().equals(course) && session.consumeIgnoreNextStartPlate()) {
                 return;
             }
-            sessionManager.startSession(player, course);
+            sessionManager.startSession(player, course, false);
         });
 
         Optional<ParkourManager.CheckpointMatch> match = parkourManager.findCheckpoint(block);
