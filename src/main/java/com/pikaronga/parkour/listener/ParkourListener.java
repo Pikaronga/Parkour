@@ -24,13 +24,17 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 public class ParkourListener implements Listener {
 
     private final ParkourManager parkourManager;
     private final SessionManager sessionManager;
     private final MessageManager messageManager;
+    private final Set<UUID> recentPhysicalPlates = new HashSet<>();
 
     public ParkourListener(
                            ParkourManager parkourManager,
@@ -51,6 +55,7 @@ public class ParkourListener implements Listener {
             if (!isPressurePlate(type)) {
                 return;
             }
+            recentPhysicalPlates.add(event.getPlayer().getUniqueId());
             handlePressurePlate(event.getPlayer(), event.getClickedBlock().getLocation());
         } else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             ItemStack item = event.getItem();
@@ -112,6 +117,22 @@ public class ParkourListener implements Listener {
         if (to == null) {
             return;
         }
+        boolean skipPlateHandling = recentPhysicalPlates.remove(player.getUniqueId());
+        if (!skipPlateHandling) {
+            Location from = event.getFrom();
+            if (from.getBlockX() != to.getBlockX()
+                    || from.getBlockY() != to.getBlockY()
+                    || from.getBlockZ() != to.getBlockZ()) {
+                org.bukkit.block.Block toBlock = to.getBlock();
+                if (isPressurePlate(toBlock.getType())) {
+                    handlePressurePlate(player, toBlock.getLocation());
+                    session = sessionManager.getSession(player);
+                    if (session == null) {
+                        return;
+                    }
+                }
+            }
+        }
         Location checkpoint = session.getLastCheckpoint();
         if (checkpoint == null) {
             return;
@@ -143,6 +164,7 @@ public class ParkourListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        recentPhysicalPlates.remove(event.getPlayer().getUniqueId());
         sessionManager.endSession(event.getPlayer(), false);
     }
 
