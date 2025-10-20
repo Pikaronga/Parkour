@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.hologram;
 
 import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Bukkit;
@@ -21,11 +22,13 @@ public class PersonalBestHologram {
     private final Location baseLocation;
     private ArmorStand headerStand;
     private final Map<UUID, ArmorStand> personalLines = new HashMap<>();
+    private final HologramTextProvider textProvider;
 
-    public PersonalBestHologram(ParkourPlugin plugin, ParkourCourse course, Location baseLocation) {
+    public PersonalBestHologram(ParkourPlugin plugin, ParkourCourse course, Location baseLocation, HologramTextProvider textProvider) {
         this.plugin = plugin;
         this.course = course;
         this.baseLocation = baseLocation.clone();
+        this.textProvider = textProvider;
         spawnHeader();
         Bukkit.getOnlinePlayers().forEach(this::prepareForPlayer);
     }
@@ -36,7 +39,7 @@ public class PersonalBestHologram {
             return;
         }
         headerStand = (ArmorStand) world.spawnEntity(baseLocation, EntityType.ARMOR_STAND);
-        configureStand(headerStand, "§eYour current best time:");
+        configureStand(headerStand, textProvider.formatBestHeader(course.getName()));
     }
 
     private ArmorStand spawnPersonalLine() {
@@ -45,7 +48,7 @@ public class PersonalBestHologram {
             return null;
         }
         ArmorStand stand = (ArmorStand) world.spawnEntity(baseLocation.clone().add(0, -0.3, 0), EntityType.ARMOR_STAND);
-        configureStand(stand, "§7No time recorded.");
+        configureStand(stand, textProvider.formatBestEmpty(course.getName()));
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
         return stand;
     }
@@ -78,9 +81,9 @@ public class PersonalBestHologram {
         }
         long best = course.getBestTime(player.getUniqueId());
         if (best <= 0) {
-            stand.setCustomName("§7No time recorded.");
+            stand.setCustomName(textProvider.formatBestEmpty(course.getName()));
         } else {
-            stand.setCustomName("§f" + player.getName() + " §7- §a" + TimeUtil.formatDuration(best));
+            stand.setCustomName(textProvider.formatBestEntry(player.getName(), TimeUtil.formatDuration(best), course.getName()));
         }
         Bukkit.getOnlinePlayers().forEach(online -> {
             if (!online.getUniqueId().equals(player.getUniqueId())) {

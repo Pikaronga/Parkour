@@ -1,5 +1,6 @@
 package com.pikaronga.parkour.listener;
 
+import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.session.ParkourSession;
 import com.pikaronga.parkour.session.SessionManager;
 import com.pikaronga.parkour.util.ParkourManager;
@@ -29,12 +30,15 @@ public class ParkourListener implements Listener {
 
     private final ParkourManager parkourManager;
     private final SessionManager sessionManager;
+    private final MessageManager messageManager;
 
     public ParkourListener(
                            ParkourManager parkourManager,
-                           SessionManager sessionManager) {
+                           SessionManager sessionManager,
+                           MessageManager messageManager) {
         this.parkourManager = parkourManager;
         this.sessionManager = sessionManager;
+        this.messageManager = messageManager;
     }
 
     @EventHandler
@@ -84,7 +88,7 @@ public class ParkourListener implements Listener {
             ParkourSession session = sessionManager.getSession(player);
             if (session != null && session.getCourse().equals(match.get().course())) {
                 session.setLastCheckpoint(match.get().checkpoint().respawnLocation());
-                player.sendMessage("§aCheckpoint reached!");
+                player.sendMessage(messageManager.getMessage("checkpoint-reached", "&aCheckpoint reached!"));
             }
         }
 
@@ -114,7 +118,7 @@ public class ParkourListener implements Listener {
         }
         if (to.getY() < checkpoint.getY() - 6) {
             player.teleport(checkpoint);
-            player.sendMessage("§cYou fell! Teleporting to your checkpoint.");
+            player.sendMessage(messageManager.getMessage("fell-teleport", "&cYou fell! Teleporting to your checkpoint."));
         }
     }
 
@@ -132,7 +136,7 @@ public class ParkourListener implements Listener {
             Location checkpoint = session.getLastCheckpoint();
             if (checkpoint != null) {
                 player.teleport(checkpoint);
-                player.sendMessage("§cYou fell! Teleporting to your checkpoint.");
+                player.sendMessage(messageManager.getMessage("fell-teleport", "&cYou fell! Teleporting to your checkpoint."));
             }
         }
     }
@@ -183,7 +187,7 @@ public class ParkourListener implements Listener {
         if (session == null) {
             return;
         }
-        player.sendMessage("§cYou cannot use commands while in a parkour.");
+        player.sendMessage(messageManager.getMessage("command-blocked", "&cYou cannot use commands while in a parkour."));
         event.setCancelled(true);
     }
 
