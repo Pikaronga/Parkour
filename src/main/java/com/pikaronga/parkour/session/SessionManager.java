@@ -59,7 +59,7 @@ public class SessionManager {
         }
         if (existing != null) {
             sessions.remove(player.getUniqueId());
-            endSession(existing, false);
+            endSession(existing, false, teleportToStart);
         }
         ParkourSession session = new ParkourSession(player, course, startTeleport);
         session.captureInventory();
@@ -124,6 +124,10 @@ public class SessionManager {
     }
 
     private void endSession(ParkourSession session, boolean completed) {
+        endSession(session, completed, true);
+    }
+
+    private void endSession(ParkourSession session, boolean completed, boolean teleportToFinish) {
         session.restoreInventory();
         if (completed) {
             long durationNanos = System.nanoTime() - session.getStartTimeNanos();
@@ -132,7 +136,7 @@ public class SessionManager {
             session.getPlayer().sendMessage(messageManager.getMessage("left-parkour", "&cYou have left the parkour."));
         }
         Location completionSpawn = session.getCourse().getFinishTeleport();
-        if (completionSpawn != null) {
+        if (teleportToFinish && completionSpawn != null) {
             session.getPlayer().teleport(completionSpawn);
         }
     }
