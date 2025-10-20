@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class ParkourCommand implements CommandExecutor, TabCompleter {
 
@@ -45,7 +46,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         if (args.length < 2) {
-            player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest> <name>"));
+            player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour <setstart|setend|setspawn|setcheckpoint|setholotop10|setholobest|setmaxfall> <name> [value]"));
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -59,6 +60,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             case "setcheckpoint" -> handleSetCheckpoint(player, course);
             case "setholotop10" -> handleSetTopHolo(player, course);
             case "setholobest" -> handleSetBestHolo(player, course);
+            case "setmaxfall" -> handleSetMaxFall(player, course, args);
             default -> {
                 player.sendMessage(messageManager.getMessage("unknown-subcommand", "&cUnknown subcommand."));
                 success = false;
@@ -78,7 +80,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         }
         course.setStartPlate(block.getLocation());
         course.setStartTeleport(player.getLocation());
-        player.sendMessage(messageManager.getMessage("set-start-plate", "&aSet start plate for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("set-start-plate", "&aSet start plate for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetEnd(Player player, ParkourCourse course) {
@@ -88,12 +90,12 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return;
         }
         course.setFinishPlate(block.getLocation());
-        player.sendMessage(messageManager.getMessage("set-end-plate", "&aSet end plate for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("set-end-plate", "&aSet end plate for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetSpawn(Player player, ParkourCourse course) {
         course.setFinishTeleport(player.getLocation());
-        player.sendMessage(messageManager.getMessage("set-completion-spawn", "&aSet completion spawn for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("set-completion-spawn", "&aSet completion spawn for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetCheckpoint(Player player, ParkourCourse course) {
@@ -103,19 +105,39 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return;
         }
         course.addCheckpoint(new Checkpoint(block.getLocation(), player.getLocation()));
-        player.sendMessage(messageManager.getMessage("checkpoint-added", "&aAdded checkpoint to parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("checkpoint-added", "&aAdded checkpoint to parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetTopHolo(Player player, ParkourCourse course) {
         Location location = player.getLocation().clone().add(0, 2, 0);
         hologramManager.setTopHologram(course, location);
-        player.sendMessage(messageManager.getMessage("set-top-holo", "&aSet top times hologram for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("set-top-holo", "&aSet top times hologram for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetBestHolo(Player player, ParkourCourse course) {
         Location location = player.getLocation().clone().add(0, 2, 0);
         hologramManager.setBestHologram(course, location);
-        player.sendMessage(messageManager.getMessage("set-best-holo", "&aSet personal best hologram for parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+        player.sendMessage(messageManager.getMessage("set-best-holo", "&aSet personal best hologram for parkour &f{course}&a.", Map.of("course", course.getName())));
+    }
+
+    private void handleSetMaxFall(Player player, ParkourCourse course, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage(messageManager.getMessage("setmaxfall-usage", "&cUsage: /parkour setmaxfall <name> <distance>"));
+            return;
+        }
+        double distance;
+        try {
+            distance = Double.parseDouble(args[2]);
+        } catch (NumberFormatException exception) {
+            player.sendMessage(messageManager.getMessage("invalid-max-fall", "&cPlease provide a valid non-negative number for max fall distance."));
+            return;
+        }
+        if (distance < 0) {
+            player.sendMessage(messageManager.getMessage("invalid-max-fall", "&cPlease provide a valid non-negative number for max fall distance."));
+            return;
+        }
+        course.setMaxFallDistance(distance);
+        player.sendMessage(messageManager.getMessage("set-max-fall", "&aSet max fall distance for parkour &f{course}&a to &f{distance}&a.", Map.of("course", course.getName(), "distance", Double.toString(distance))));
     }
 
     private Block getTargetPressurePlate(Player player) {
@@ -136,10 +158,15 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest");
+            return Arrays.asList("setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall");
         }
         if (args.length == 2) {
             return new ArrayList<>(parkourManager.getCourseNames());
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("setmaxfall")) {
+            ParkourCourse course = parkourManager.getCourse(args[1]);
+            double suggestion = course != null ? course.getMaxFallDistance() : ParkourCourse.DEFAULT_MAX_FALL_DISTANCE;
+            return Collections.singletonList(Double.toString(suggestion));
         }
         return Collections.emptyList();
     }

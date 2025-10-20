@@ -51,6 +51,9 @@ public class ParkourStorage {
             course.setStartTeleport(LocationUtil.deserialize(section.getConfigurationSection("startTeleport")));
             course.setFinishPlate(LocationUtil.deserialize(section.getConfigurationSection("finishPlate")));
             course.setFinishTeleport(LocationUtil.deserialize(section.getConfigurationSection("finishTeleport")));
+            if (section.contains("maxFallDistance")) {
+                course.setMaxFallDistance(section.getDouble("maxFallDistance"));
+            }
             ConfigurationSection checkpointsSection = section.getConfigurationSection("checkpoints");
             if (checkpointsSection != null) {
                 for (String cpKey : checkpointsSection.getKeys(false)) {
@@ -118,6 +121,7 @@ public class ParkourStorage {
             if (course.getFinishTeleport() != null) {
                 LocationUtil.serialize(section.createSection("finishTeleport"), course.getFinishTeleport());
             }
+            section.set("maxFallDistance", course.getMaxFallDistance());
             if (!course.getCheckpoints().isEmpty()) {
                 ConfigurationSection checkpointsSection = section.createSection("checkpoints");
                 int i = 0;

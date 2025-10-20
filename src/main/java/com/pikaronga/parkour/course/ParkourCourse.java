@@ -16,6 +16,8 @@ import java.util.stream.Collectors;
 
 public class ParkourCourse {
 
+    public static final double DEFAULT_MAX_FALL_DISTANCE = 6.0;
+
     private final String name;
     private Location startPlate;
     private Location startTeleport;
@@ -25,6 +27,7 @@ public class ParkourCourse {
     private Location topHologramLocation;
     private Location bestHologramLocation;
     private final Map<UUID, List<Long>> times = new HashMap<>();
+    private double maxFallDistance = DEFAULT_MAX_FALL_DISTANCE;
 
     public ParkourCourse(String name) {
         this.name = name;
@@ -96,6 +99,17 @@ public class ParkourCourse {
 
     public Map<UUID, List<Long>> getTimes() {
         return times;
+    }
+
+    public double getMaxFallDistance() {
+        return maxFallDistance;
+    }
+
+    public void setMaxFallDistance(double maxFallDistance) {
+        if (Double.isNaN(maxFallDistance) || Double.isInfinite(maxFallDistance) || maxFallDistance < 0) {
+            return;
+        }
+        this.maxFallDistance = maxFallDistance;
     }
 
     public void addTime(UUID playerId, long time) {
