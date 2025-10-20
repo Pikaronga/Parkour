@@ -30,6 +30,10 @@ public class SessionManager {
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course) {
+        return startSession(player, course, true);
+    }
+
+    public ParkourSession startSession(Player player, ParkourCourse course, boolean teleportToStart) {
         ParkourSession existing = sessions.get(player.getUniqueId());
         Location startTeleport = course.getStartTeleport();
         if (startTeleport == null && course.getStartPlate() != null) {
@@ -44,7 +48,9 @@ public class SessionManager {
             player.setGameMode(org.bukkit.GameMode.ADVENTURE);
             giveParkourItems(player);
             if (startTeleport != null) {
-                player.teleport(startTeleport);
+                if (teleportToStart) {
+                    player.teleport(startTeleport);
+                }
                 existing.setLastCheckpoint(startTeleport);
             }
             existing.resetTimer();
@@ -53,7 +59,7 @@ public class SessionManager {
         }
         if (existing != null) {
             sessions.remove(player.getUniqueId());
-            endSession(existing, false);
+            endSession(existing, false, teleportToStart);
         }
         ParkourSession session = new ParkourSession(player, course, startTeleport);
         session.captureInventory();
@@ -63,7 +69,9 @@ public class SessionManager {
         player.setGameMode(org.bukkit.GameMode.ADVENTURE);
         giveParkourItems(player);
         if (startTeleport != null) {
-            player.teleport(startTeleport);
+            if (teleportToStart) {
+                player.teleport(startTeleport);
+            }
             session.setLastCheckpoint(startTeleport);
         }
         sessions.put(player.getUniqueId(), session);
@@ -116,6 +124,10 @@ public class SessionManager {
     }
 
     private void endSession(ParkourSession session, boolean completed) {
+        endSession(session, completed, true);
+    }
+
+    private void endSession(ParkourSession session, boolean completed, boolean teleportToFinish) {
         session.restoreInventory();
         if (completed) {
             long durationNanos = System.nanoTime() - session.getStartTimeNanos();
@@ -124,7 +136,7 @@ public class SessionManager {
             session.getPlayer().sendMessage(messageManager.getMessage("left-parkour", "&cYou have left the parkour."));
         }
         Location completionSpawn = session.getCourse().getFinishTeleport();
-        if (completionSpawn != null) {
+        if (teleportToFinish && completionSpawn != null) {
             session.getPlayer().teleport(completionSpawn);
         }
     }
