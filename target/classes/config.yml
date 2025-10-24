@@ -1,0 +1,46 @@
+player-parkours:
+  enabled: true
+  world: "player_parkours"
+  world-void: true
+  platform:
+    y: 64
+    size: 5
+    block: "STONE"
+  plot-size: 64
+  plot-gap: 16
+  give-creative: true
+  allow-worldedit: true
+  worldedit:
+    max-blocks-per-operation: 3000
+    deny:
+      - set
+      - replace
+      - stack
+      - paste
+      - fill
+      - line
+      - cyl
+      - sphere
+      - smooth
+      - walls
+      - faces
+      - hcyl
+      - hsphere
+    allow: []
+  max-per-player: 3
+  create-cooldown-seconds: 0
+  top-hologram-size: 5
+  storage: "sqlite"  # options: sqlite, yaml
+  outline:
+    enabled: true
+    border-block: "YELLOW_CONCRETE"
+    corner-block: "SEA_LANTERN"
+  world-rules:
+    block-natural-spawns: true
+  borders:
+    use-worldborder: true
+  rewards:
+    enabled: false
+    interval-days: 7
+    winners: 3
+    command: "give %player% diamond 3"

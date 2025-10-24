@@ -2,6 +2,7 @@ package com.pikaronga.parkour.listener;
 
 import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.session.ParkourSession;
+import com.pikaronga.parkour.player.PlayerParkourManager;
 import com.pikaronga.parkour.session.SessionManager;
 import com.pikaronga.parkour.util.ParkourManager;
 import org.bukkit.Location;
@@ -35,14 +36,17 @@ public class ParkourListener implements Listener {
     private final SessionManager sessionManager;
     private final MessageManager messageManager;
     private final Set<UUID> recentPhysicalPlates = new HashSet<>();
+    private final PlayerParkourManager ppm;
 
     public ParkourListener(
                            ParkourManager parkourManager,
                            SessionManager sessionManager,
-                           MessageManager messageManager) {
+                           MessageManager messageManager,
+                           PlayerParkourManager ppm) {
         this.parkourManager = parkourManager;
         this.sessionManager = sessionManager;
         this.messageManager = messageManager;
+        this.ppm = ppm;
     }
 
     @EventHandler
@@ -78,6 +82,10 @@ public class ParkourListener implements Listener {
     private void handlePressurePlate(Player player, Location blockLocation) {
         org.bukkit.block.Block block = blockLocation.getBlock();
         parkourManager.findCourseByStart(block).ifPresent(course -> {
+            boolean allowed = course.isPublished() || (ppm != null && ppm.isOwner(player, course) && ppm.isTesting(player.getUniqueId(), course));
+            if (!allowed) {
+                return;
+            }
             if (course.getStartTeleport() == null) {
                 course.setStartTeleport(blockLocation.clone().add(0.5, 0, 0.5));
             }
@@ -85,11 +93,19 @@ public class ParkourListener implements Listener {
             if (session != null && session.getCourse().equals(course) && session.consumeIgnoreNextStartPlate()) {
                 return;
             }
-            sessionManager.startSession(player, course, false);
+            if (ppm != null && ppm.isTesting(player.getUniqueId(), course)) {
+                sessionManager.startSessionTest(player, course, false);
+            } else {
+                sessionManager.startSession(player, course, false);
+            }
         });
 
         Optional<ParkourManager.CheckpointMatch> match = parkourManager.findCheckpoint(block);
         if (match.isPresent()) {
+            boolean allowed = match.get().course().isPublished() || (ppm != null && ppm.isOwner(player, match.get().course()) && ppm.isTesting(player.getUniqueId(), match.get().course()));
+            if (!allowed) {
+                return;
+            }
             ParkourSession session = sessionManager.getSession(player);
             if (session != null && session.getCourse().equals(match.get().course())) {
                 session.setLastCheckpoint(match.get().checkpoint().respawnLocation());
@@ -98,6 +114,10 @@ public class ParkourListener implements Listener {
         }
 
         parkourManager.findCourseByFinish(block).ifPresent(course -> {
+            boolean allowed = course.isPublished() || (ppm != null && ppm.isOwner(player, course) && ppm.isTesting(player.getUniqueId(), course));
+            if (!allowed) {
+                return;
+            }
             ParkourSession session = sessionManager.getSession(player);
             if (session == null || !session.getCourse().equals(course)) {
                 return;
@@ -156,6 +176,9 @@ public class ParkourListener implements Listener {
                 player.teleport(checkpoint);
                 player.sendMessage(messageManager.getMessage("fell-teleport", "&cYou fell! Teleporting to your checkpoint."));
             }
+        } else if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            // Prevent fall damage while in a parkour session
+            event.setCancelled(true);
         }
     }
 

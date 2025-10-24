@@ -1,0 +1,37 @@
+name: Parkour
+main: com.pikaronga.parkour.ParkourPlugin
+version: 1.0.0
+author: OpenAI
+api-version: 1.21
+softdepend:
+  - WorldEdit
+commands:
+  parkour:
+    description: Parkour management commands
+    usage: /parkour <subcommand>
+    permission: parkour.player
+permissions:
+  parkour.admin:
+    description: Allows management of parkours
+    default: op
+  parkour.player:
+    description: Allows basic player parkour commands
+    default: true
+  parkour.player.create:
+    description: Create your own parkour
+    default: true
+  parkour.player.publish:
+    description: Publish your parkour
+    default: true
+  parkour.player.browse:
+    description: Browse published parkours
+    default: true
+  parkour.player.rate:
+    description: Rate published parkours
+    default: true
+  parkour.player.edit:
+    description: Edit your own player parkours (owner-only enforced)
+    default: true
+  parkour.player.myplots:
+    description: View your own parkours GUI
+    default: true

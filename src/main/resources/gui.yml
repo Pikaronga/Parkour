@@ -1,0 +1,48 @@
+gui:
+  published:
+    title: "&3Player Parkours | sort:{sort} | page:{page}/{pages}"
+    controls:
+      previous: { material: PAPER, name: "&ePrevious" }
+      my-plots: { material: BOOK, name: "&aMy Parkours" }
+      sort: { material: COMPARATOR, name: "&bSort: {sort}" }
+      next: { material: PAPER, name: "&eNext" }
+    item:
+      material: LIGHT_WEIGHTED_PRESSURE_PLATE
+      name: "&6{course}"
+      lore:
+        - "&7Looks: &e{looks}"
+        - "&7Difficulty: &e{difficulty}"
+        - "&7Staff Diff: &c{staffDiff}"
+        - "&7By: &b{creators}"
+  my-plots:
+    title: "&2My Parkours | page:{page}/{pages}"
+    controls:
+      previous: { material: PAPER, name: "&ePrevious" }
+      browse: { material: COMPASS, name: "&bBrowse Published" }
+      next: { material: PAPER, name: "&eNext" }
+    item:
+      material: GRASS_BLOCK
+      name: "&a{course}"
+      lore:
+        - "&7Status: {published}"
+        - "&7Region: &f({minX},{minZ}) size {size}"
+  setup:
+    title: "&3Setup: {course}"
+    buttons:
+      status: { slot: 4 }
+      set-start: { slot: 10, material: HEAVY_WEIGHTED_PRESSURE_PLATE, name: "&aSet Start", lore: "&7Stand where you want the start, then click." }
+      set-end: { slot: 11, material: LIGHT_WEIGHTED_PRESSURE_PLATE, name: "&aSet End", lore: "&7Look at the end plate, then click." }
+      set-spawn: { slot: 12, material: RED_BED, name: "&aSet Completion Spawn", lore: "&7Stand at the completion spawn, then click." }
+      add-checkpoint: { slot: 13, material: STONE_PRESSURE_PLATE, name: "&bAdd Checkpoint", lore: "&7Look at a checkpoint plate, then click." }
+      set-top: { slot: 15, material: BOOK, name: "&eSet Top Hologram", lore: "&7Stand under where it should float." }
+      set-best: { slot: 16, material: NETHER_STAR, name: "&eSet Personal Best Hologram", lore: "&7Stand under where it should float." }
+      set-creator: { slot: 14, material: NAME_TAG, name: "&eSet Creator Hologram", lore: "&7Stand under where it should float." }
+      teleport: { slot: 22, material: COMPASS, name: "&6Teleport to Plot" }
+      publish: { slot: 23, material: LEVER, name: "&6Publish" }
+      toggle-test: { slot: 21, material: CLOCK, name: "&bToggle Test Mode" }
+      delete: { slot: 24, material: LAVA_BUCKET, name: "&cDelete Parkour" }
+      close: { slot: 26, material: BARRIER, name: "&cClose" }
+  confirm-delete:
+    title: "&cDelete &f{course}&c?"
+    yes: { slot: 11, material: RED_WOOL, name: "&cConfirm Delete" }
+    no: { slot: 15, material: LIME_WOOL, name: "&aCancel" }

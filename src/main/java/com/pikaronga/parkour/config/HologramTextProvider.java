@@ -57,6 +57,14 @@ public class HologramTextProvider {
         return getString("personal-best.entry", "&f{name} &7- &a{time}", placeholders);
     }
 
+    public String formatCreatorsHeader(String courseName) {
+        return getString("creators.header", "&aCreated by:", Map.of("course", courseName));
+    }
+
+    public String formatCreatorEntry(String name, String courseName) {
+        return getString("creators.entry", "&f" + name, Map.of("course", courseName, "name", name));
+    }
+
     private String getString(String path, String def, Map<String, String> placeholders) {
         String value = configuration.getString(path);
         if (value == null) {

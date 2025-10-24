@@ -1,26 +1,90 @@
 # Parkour Plugin
 
-This plugin adds a fully managed parkour system featuring:
+Parkour with checkpoints, holograms, timing, and optional player-made parkours with plots, ratings, and GUIs.
 
-- **Start plates** that place players into parkour mode with a clean state.
-- **Checkpoint plates** that update the player's return location if they fall.
-- **Finish plates** that record completion times and teleport players to a configured spawn.
-- **Custom parkour inventory** with restart, checkpoint, and leave tools.
-- **Top 10 holograms** showing the best overall runs for the parkour.
-- **Personal best holograms** that dynamically display the nearest player's best time.
-- **Persistent storage** of parkour configuration and completion history in `parkours.yml`.
+## Core Features
 
-## Commands
+- Start/Checkpoint/Finish plates with fall/void safety and checkpoint returns
+- Custom parkour inventory (restart, last checkpoint, leave)
+- Top times holograms and personal best holograms
+- Persistent storage in `parkours.yml`
 
-All commands require `parkour.admin`.
+## Player Parkours (Toggleable)
+
+- Config: `player-parkours.enabled: true/false` (Parkour/src/main/resources/config.yml)
+- Dedicated flat world for player plots, per-plot build protection
+- Creative inside your plot (restores on exit)
+- WorldEdit confined to your plot and capped per operation
+- Ratings (Looks + Difficulty) and Staff Difficulty
+- “Created by …” hologram per course
+- Browse GUI with pagination and sorting
+
+## Permissions
+
+- `parkour.admin` — admin management
+- `parkour.player` — base permission for `/parkour` (default: true)
+- `parkour.player.create` — create player parkours (default: true)
+- `parkour.player.publish` — publish your parkour (default: true)
+- `parkour.player.browse` — open the browse GUI (default: true)
+- `parkour.player.rate` — rate published parkours (default: true)
+- `parkour.player.edit` — edit your own parkours (owner-only enforced, default: true)
+
+## Admin Commands (require `parkour.admin`)
 
 ```
-/parkour setstart <name>       # Set the start pressure plate and teleport location
-/parkour setend <name>         # Set the end pressure plate that completes the course
-/parkour setspawn <name>       # Set the completion spawn used after finishing or leaving
-/parkour setcheckpoint <name>  # Add a checkpoint pressure plate at your location
-/parkour setholotop10 <name>   # Place the Top 10 hologram above your position
-/parkour setholobest <name>    # Place the personal best hologram above your position
+/parkour setstart <name>        # Set start plate + start teleport
+/parkour setend <name>          # Set finish plate
+/parkour setspawn <name>        # Set completion teleport
+/parkour setcheckpoint <name>   # Add a checkpoint plate (uses your look + position)
+/parkour setholotop10 <name>    # Place Top Times hologram
+/parkour setholobest <name>     # Place Personal Best hologram
+/parkour setcreatorholo <name>  # Place "Created by" hologram
+/parkour setmaxfall <name> <distance>  # Set max fall distance before TP to checkpoint
+/parkour setstaffdiff <name> <1-5>     # Set staff difficulty
+/parkour admin                   # Open admin list GUI for all player parkours
+/parkour rewardbest              # Issue rewards to top "Looks" parkours (configurable)
 ```
+
+## Player Commands
+
+```
+/parkour create <name>                     # Create a parkour; allocates a plot and teleports you there
+/parkour publish <name>                    # Publish (requires start+end plates and >= 20 placed blocks)
+/parkour browse [rate|difficulty|name] [page]  # Open browse GUI (sort + pagination)
+/parkour rate <name> <looks 1-5> <diff 1-5>    # Rate a published parkour
+
+# Edit your own parkour (owner-only, requires `parkour.player.edit`)
+/parkour psetstart <name>        # Set start plate + start teleport
+/parkour psetend <name>          # Set finish plate
+/parkour psetspawn <name>        # Set completion teleport
+/parkour psetcheckpoint <name>   # Add a checkpoint plate
+/parkour psettop <name>          # Place Top Times hologram
+/parkour psetbest <name>         # Place Personal Best hologram
+/parkour psetcreatorholo <name>  # Place "Created by" hologram
+```
+
+Ownership checks ensure players can only modify their own courses and holograms.
+
+## WorldEdit Confinement
+
+- Enabled when `player-parkours.allow-worldedit: true` and WorldEdit is installed
+- All WE edits are restricted to the player’s plot; edits outside are blocked
+- Per-operation block cap: `player-parkours.worldedit.max-blocks-per-operation` (default 3000)
+
+## Publish Requirements
+
+- Must have a start plate and an end plate
+- Must have placed at least 20 blocks inside the plot
+
+## Holograms
+
+- Top Times (default top 10; for player parkours uses `top-hologram-size` from config)
+- Personal Best (per player)
+- “Created by …” hologram shows creators
+
+## Browse GUI
+
+- Sort by: Rate (Looks), Difficulty, Name
+- Pagination controls in GUI (Prev/Next); sort toggle in center
 
 After configuring a course, players can step on the start plate to begin a timed run with checkpoints and holographic leaderboards.

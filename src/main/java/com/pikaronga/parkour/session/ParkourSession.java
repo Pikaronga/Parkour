@@ -19,6 +19,7 @@ public class ParkourSession {
     private GameMode originalGameMode;
     private boolean originalAllowFlight;
     private boolean ignoreNextStartPlate;
+    private boolean testMode;
 
     public ParkourSession(Player player, ParkourCourse course, Location startLocation) {
         this.player = player;
@@ -97,4 +98,7 @@ public class ParkourSession {
         ignoreNextStartPlate = false;
         return true;
     }
+
+    public void setTestMode(boolean test) { this.testMode = test; }
+    public boolean isTestMode() { return testMode; }
 }

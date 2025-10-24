@@ -29,6 +29,16 @@ public class ParkourCourse {
     private final Map<UUID, List<Long>> times = new HashMap<>();
     private double maxFallDistance = DEFAULT_MAX_FALL_DISTANCE;
 
+    // Player-parkour specific (optional)
+    private final List<UUID> creators = new ArrayList<>();
+    private boolean published = false;
+    private com.pikaronga.parkour.player.PlotRegion plotRegion;
+    private Location creatorHologramLocation;
+    private final Map<UUID, Integer> lookRatings = new HashMap<>();
+    private final Map<UUID, Integer> difficultyRatings = new HashMap<>();
+    private Integer staffDifficulty; // 1-5 optional
+    private int placedBlocks = 0;
+
     public ParkourCourse(String name) {
         this.name = name;
     }
@@ -136,7 +146,11 @@ public class ParkourCourse {
     }
 
     public List<String> createTopLines(HologramTextProvider textProvider) {
-        List<Map.Entry<UUID, Long>> top = getTopTimes(10);
+        return createTopLinesWithLimit(textProvider, 10);
+    }
+
+    public List<String> createTopLinesWithLimit(HologramTextProvider textProvider, int limit) {
+        List<Map.Entry<UUID, Long>> top = getTopTimes(limit);
         List<String> lines = new ArrayList<>();
         lines.add(textProvider.formatTopHeader(getName()));
         if (top.isEmpty()) {
@@ -153,4 +167,45 @@ public class ParkourCourse {
         }
         return lines;
     }
+
+    // --- Player-parkour additions ---
+    public List<UUID> getCreators() { return creators; }
+    public void addCreator(UUID uuid) { if (!creators.contains(uuid)) creators.add(uuid); }
+    public void removeCreator(UUID uuid) { creators.remove(uuid); }
+    public boolean isPublished() { return published; }
+    public void setPublished(boolean published) { this.published = published; }
+    public com.pikaronga.parkour.player.PlotRegion getPlotRegion() { return plotRegion; }
+    public void setPlotRegion(com.pikaronga.parkour.player.PlotRegion plotRegion) { this.plotRegion = plotRegion; }
+    public Location getCreatorHologramLocation() { return creatorHologramLocation; }
+    public void setCreatorHologramLocation(Location location) { this.creatorHologramLocation = location; }
+
+    public void setLookRating(UUID player, int value) {
+        int v = Math.max(1, Math.min(5, value));
+        lookRatings.put(player, v);
+    }
+    public void setDifficultyRating(UUID player, int value) {
+        int v = Math.max(1, Math.min(5, value));
+        difficultyRatings.put(player, v);
+    }
+    public Map<UUID, Integer> getLookRatings() { return lookRatings; }
+    public Map<UUID, Integer> getDifficultyRatings() { return difficultyRatings; }
+    public double getAverageLookRating() {
+        if (lookRatings.isEmpty()) return 0.0;
+        return lookRatings.values().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+    }
+    public double getAverageDifficultyRating() {
+        if (difficultyRatings.isEmpty()) return 0.0;
+        return difficultyRatings.values().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+    }
+    public Integer getStaffDifficulty() { return staffDifficulty; }
+    public void setStaffDifficulty(Integer staffDifficulty) {
+        if (staffDifficulty == null) { this.staffDifficulty = null; return; }
+        int v = Math.max(1, Math.min(5, staffDifficulty));
+        this.staffDifficulty = v;
+    }
+
+    public int getPlacedBlocks() { return placedBlocks; }
+    public void setPlacedBlocks(int value) { this.placedBlocks = Math.max(0, value); }
+    public void incrementPlacedBlocks() { this.placedBlocks++; }
+    public void decrementPlacedBlocks() { if (this.placedBlocks > 0) this.placedBlocks--; }
 }

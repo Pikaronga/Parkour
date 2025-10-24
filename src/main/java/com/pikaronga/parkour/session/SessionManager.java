@@ -34,6 +34,7 @@ public class SessionManager {
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course, boolean teleportToStart) {
+        try { plugin.getCacheManager().startUsing(course); } catch (Throwable ignored) {}
         ParkourSession existing = sessions.get(player.getUniqueId());
         Location startTeleport = course.getStartTeleport();
         if (startTeleport == null && course.getStartPlate() != null) {
@@ -79,6 +80,15 @@ public class SessionManager {
         return session;
     }
 
+    public ParkourSession startSessionTest(Player player, ParkourCourse course, boolean teleportToStart) {
+        ParkourSession s = startSession(player, course, teleportToStart);
+        if (s != null) {
+            s.setTestMode(true);
+            player.sendMessage(messageManager.getMessage("started-parkour", "&aStarted parkour &f{course}&a! Good luck.", java.util.Map.of("course", course.getName())));
+        }
+        return s;
+    }
+
     private void giveParkourItems(Player player) {
         player.getInventory().clear();
         player.getInventory().setHeldItemSlot(0);
@@ -119,6 +129,7 @@ public class SessionManager {
     public void endSession(Player player, boolean completed) {
         ParkourSession session = sessions.remove(player.getUniqueId());
         if (session != null) {
+            try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
             endSession(session, completed);
         }
     }
@@ -148,13 +159,22 @@ public class SessionManager {
         }
         session.restoreInventory();
         long durationNanos = System.nanoTime() - session.getStartTimeNanos();
-        session.getCourse().addTime(player.getUniqueId(), durationNanos);
+        if (session.isTestMode()) {
+            // Test sessions do not update leaderboards or holograms
+            player.sendMessage(messageManager.getMessage("test-completed", "&eTest completed in &f{time}&e.", java.util.Map.of("time", com.pikaronga.parkour.util.TimeUtil.formatDuration(durationNanos))));
+        } else {
+            session.getCourse().addTime(player.getUniqueId(), durationNanos);
+            try { plugin.getCacheManager().markDirty(session.getCourse()); } catch (Throwable ignored) {}
+        }
         if (session.getCourse().getFinishTeleport() != null) {
             player.teleport(session.getCourse().getFinishTeleport());
         }
-        player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
-        plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
-        plugin.getHologramManager().updateHolograms(session.getCourse());
+        if (!session.isTestMode()) {
+            player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
+            plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
+            plugin.getHologramManager().updateHolograms(session.getCourse());
+        }
+        try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
         return durationNanos;
     }
 

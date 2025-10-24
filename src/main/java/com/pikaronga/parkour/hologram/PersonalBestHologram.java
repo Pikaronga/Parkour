@@ -10,6 +10,8 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +40,7 @@ public class PersonalBestHologram {
         if (world == null) {
             return;
         }
+        try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
         headerStand = (ArmorStand) world.spawnEntity(baseLocation, EntityType.ARMOR_STAND);
         configureStand(headerStand, textProvider.formatBestHeader(course.getName()));
     }
@@ -47,6 +50,7 @@ public class PersonalBestHologram {
         if (world == null) {
             return null;
         }
+        try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
         ArmorStand stand = (ArmorStand) world.spawnEntity(baseLocation.clone().add(0, -0.3, 0), EntityType.ARMOR_STAND);
         configureStand(stand, textProvider.formatBestEmpty(course.getName()));
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
@@ -58,10 +62,18 @@ public class PersonalBestHologram {
         stand.setMarker(true);
         stand.setInvisible(true);
         stand.setCustomNameVisible(true);
-        stand.setCustomName(name);
+        try {
+            Component comp = LegacyComponentSerializer.legacySection().deserialize(name);
+            stand.customName(comp);
+        } catch (Throwable t) {
+            try { stand.setCustomName(name); } catch (Throwable ignored) {}
+        }
         stand.setBasePlate(false);
         stand.setSmall(true);
-        stand.setPersistent(false);
+        stand.setPersistent(true);
+        stand.setInvulnerable(true);
+        stand.setSilent(true);
+        try { stand.addScoreboardTag("parkour_holo"); } catch (Throwable ignored) {}
     }
 
     public void prepareForPlayer(Player player) {
@@ -81,9 +93,20 @@ public class PersonalBestHologram {
         }
         long best = course.getBestTime(player.getUniqueId());
         if (best <= 0) {
-            stand.setCustomName(textProvider.formatBestEmpty(course.getName()));
+            try {
+                Component comp = LegacyComponentSerializer.legacySection().deserialize(textProvider.formatBestEmpty(course.getName()));
+                stand.customName(comp);
+            } catch (Throwable t) {
+                try { stand.setCustomName(textProvider.formatBestEmpty(course.getName())); } catch (Throwable ignored) {}
+            }
         } else {
-            stand.setCustomName(textProvider.formatBestEntry(player.getName(), TimeUtil.formatDuration(best), course.getName()));
+            String line = textProvider.formatBestEntry(player.getName(), TimeUtil.formatDuration(best), course.getName());
+            try {
+                Component comp = LegacyComponentSerializer.legacySection().deserialize(line);
+                stand.customName(comp);
+            } catch (Throwable t) {
+                try { stand.setCustomName(line); } catch (Throwable ignored) {}
+            }
         }
         Bukkit.getOnlinePlayers().forEach(online -> {
             if (!online.getUniqueId().equals(player.getUniqueId())) {

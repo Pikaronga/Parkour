@@ -6,3 +6,6 @@ personal-best:
   header: "&eYour current best time:"
   empty: "&7No time recorded."
   entry: "&f{name} &7- &a{time}"
+creators:
+  header: "&aCreated by:"
+  entry: "&f{name}"
