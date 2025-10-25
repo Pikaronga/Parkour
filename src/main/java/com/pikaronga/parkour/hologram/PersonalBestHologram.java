@@ -8,7 +8,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.NamespacedKey;
 import net.kyori.adventure.text.Component;
@@ -50,8 +49,9 @@ public class PersonalBestHologram {
             return;
         }
         try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
-        headerStand = (ArmorStand) world.spawnEntity(baseLocation, EntityType.ARMOR_STAND);
-        configureStand(headerStand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
+        headerStand = world.spawn(baseLocation, ArmorStand.class, stand -> {
+            configureStand(stand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
+        });
         if (headerStand != null) {
             plugin.getLogger().info("Spawned personal best header hologram for '" + course.getName() + "' at " + formatLocation(headerStand.getLocation()) + " (entity=" + headerStand.getUniqueId() + ")");
         }
@@ -63,8 +63,10 @@ public class PersonalBestHologram {
             return null;
         }
         try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
-        ArmorStand stand = (ArmorStand) world.spawnEntity(baseLocation.clone().add(0, -0.3, 0), EntityType.ARMOR_STAND);
-        configureStand(stand, textProvider.formatBestEmpty(course.getName()), "");
+        ArmorStand stand = world.spawn(baseLocation.clone().add(0, -0.3, 0), ArmorStand.class, s -> {
+            configureStand(s, textProvider.formatBestEmpty(course.getName()), "");
+        });
+        // initially hide from all players until we show it for the target player
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
         if (stand != null) {
             plugin.getLogger().fine("Spawned personal best line hologram for '" + course.getName() + "' at " + formatLocation(stand.getLocation()) + " (entity=" + stand.getUniqueId() + ")");
@@ -74,15 +76,17 @@ public class PersonalBestHologram {
 
     private void configureStand(ArmorStand stand, String name, String identifier) {
         stand.setGravity(false);
-        stand.setMarker(true);
+        // Use marker=false so clients render the name reliably in different server implementations
+        stand.setMarker(false);
         stand.setInvisible(true);
-        stand.setCustomNameVisible(true);
+        // apply the name first, then make it visible so metadata is applied consistently
         try {
             Component comp = LegacyComponentSerializer.legacySection().deserialize(name);
             stand.customName(comp);
         } catch (Throwable t) {
             try { stand.setCustomName(name); } catch (Throwable ignored) {}
         }
+        stand.setCustomNameVisible(true);
         stand.setBasePlate(false);
         stand.setSmall(true);
         stand.setPersistent(true);

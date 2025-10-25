@@ -3,13 +3,13 @@ package com.pikaronga.parkour.storage;
 import com.pikaronga.parkour.ParkourPlugin;
 import com.pikaronga.parkour.course.Checkpoint;
 import com.pikaronga.parkour.course.ParkourCourse;
-import com.pikaronga.parkour.util.LocationUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 
 import java.sql.*;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 public class SqliteParkourStorage {
     private final ParkourPlugin plugin;
@@ -20,71 +20,84 @@ public class SqliteParkourStorage {
         this.db = db;
     }
 
+    /* =========================================================
+     *                        LOAD
+     * ========================================================= */
     public List<ParkourCourse> loadCourses() {
         List<ParkourCourse> list = new ArrayList<>();
         String sql = "SELECT * FROM parkours";
-        try (Connection conn = db.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            try (ResultSet rs = ps.executeQuery()) {
-                int loaded = 0;
-                int skipped = 0;
-                while (rs.next()) {
-                    String name = rs.getString("name");
-                    String worldName = rs.getString("world");
-                    World world = worldName != null ? Bukkit.getWorld(worldName) : null;
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-                    if (world == null) {
-                        plugin.getLogger().warning("Skipping parkour '" + name + "': world '" + worldName + "' not loaded.");
-                        skipped++;
-                        continue;
-                    }
+            int loaded = 0;
+            int skipped = 0;
 
-                    try {
-                        ParkourCourse c = new ParkourCourse(name);
-                        ResultSetMetaData md = rs.getMetaData();
-                        Set<String> cols = new HashSet<>();
-                        for (int ci = 1; ci <= md.getColumnCount(); ci++) cols.add(md.getColumnName(ci).toLowerCase());
+            while (rs.next()) {
+                String name = rs.getString("name");
+                String worldName = rs.getString("world");
+                World world = worldName != null ? Bukkit.getWorld(worldName) : null;
 
-                        // Teleports
-                        c.setStartTeleport(readLocation(world, rs, "start_"));
-                        c.setFinishTeleport(readLocation(world, rs, "finish_"));
-                        // Plates
-                        c.setStartPlate(readBlockLocation(world, rs, "start_plate_"));
-                        c.setFinishPlate(readBlockLocation(world, rs, "finish_plate_"));
-
-                        // Difficulty / Published
-                        Integer diffObj = getNullableInteger(rs, "difficulty");
-                        if (diffObj != null) c.setStaffDifficulty(diffObj);
-                        Integer publishedObj = getNullableInteger(rs, "published");
-                        c.setPublished(publishedObj != null && publishedObj == 1);
-
-                        // Plot region
-                        if (cols.contains("plot_min_x") && cols.contains("plot_min_z") && cols.contains("plot_size")) {
-                            Integer minX = getNullableInteger(rs, "plot_min_x");
-                            Integer minZ = getNullableInteger(rs, "plot_min_z");
-                            Integer size = getNullableInteger(rs, "plot_size");
-                            if (minX != null && minZ != null && size != null)
-                                c.setPlotRegion(new com.pikaronga.parkour.player.PlotRegion(world, minX, minZ, size));
-                        }
-
-                        // Holograms
-                        readHolo(rs, world, cols, c, "top_", c::setTopHologramLocation);
-                        readHolo(rs, world, cols, c, "best_", c::setBestHologramLocation);
-                        readHolo(rs, world, cols, c, "creator_", c::setCreatorHologramLocation);
-
-                        // Creators, checkpoints, times
-                        loadCreators(conn, rs.getInt("id"), c);
-                        loadCheckpoints(conn, rs.getInt("id"), world, c);
-                        loadTimes(conn, rs.getInt("id"), c);
-
-                        list.add(c);
-                        loaded++;
-                        plugin.getLogger().info("Loaded parkour '" + name + "' in world '" + worldName + "'.");
-                    } catch (Exception rowEx) {
-                        plugin.getLogger().warning("Skipping parkour '" + name + "' due to invalid data: " + rowEx.getMessage());
-                    }
+                if (world == null) {
+                    plugin.getLogger().warning("Skipping parkour '" + name + "': world '" + worldName + "' not loaded.");
+                    skipped++;
+                    continue;
                 }
-                plugin.getLogger().info("Course loading summary: " + loaded + " loaded, " + skipped + " skipped.");
+
+                try {
+                    ParkourCourse c = new ParkourCourse(name);
+
+                    ResultSetMetaData md = rs.getMetaData();
+                    Set<String> cols = new HashSet<>();
+                    for (int ci = 1; ci <= md.getColumnCount(); ci++) {
+                        cols.add(md.getColumnName(ci).toLowerCase());
+                    }
+
+                    // Teleports
+                    c.setStartTeleport(readLocation(world, rs, "start_"));
+                    c.setFinishTeleport(readLocation(world, rs, "finish_"));
+
+                    // Plates
+                    c.setStartPlate(readBlockLocation(world, rs, "start_plate_"));
+                    c.setFinishPlate(readBlockLocation(world, rs, "finish_plate_"));
+
+                    // Difficulty / Published (nullable + guarded)
+                    Integer diffObj = getNullableInteger(rs, "difficulty");
+                    if (diffObj != null) c.setStaffDifficulty(diffObj);
+                    Integer publishedObj = getNullableInteger(rs, "published");
+                    c.setPublished(publishedObj != null && publishedObj == 1);
+
+                    // Plot region (optional columns)
+                    if (cols.contains("plot_min_x") && cols.contains("plot_min_z") && cols.contains("plot_size")) {
+                        Integer minX = getNullableInteger(rs, "plot_min_x");
+                        Integer minZ = getNullableInteger(rs, "plot_min_z");
+                        Integer size = getNullableInteger(rs, "plot_size");
+                        if (minX != null && minZ != null && size != null) {
+                            // PlotRegion stores the world name (String) — pass world.getName()
+                            c.setPlotRegion(new com.pikaronga.parkour.player.PlotRegion(world.getName(), minX, minZ, size));
+                        }
+                    }
+
+                    // Holograms (optional columns)
+                    readHolo(rs, world, cols, c, "top_", c::setTopHologramLocation);
+                    readHolo(rs, world, cols, c, "best_", c::setBestHologramLocation);
+                    readHolo(rs, world, cols, c, "creator_", c::setCreatorHologramLocation);
+
+                    // Creators, checkpoints, times
+                    int id = rs.getInt("id");
+                    loadCreators(conn, id, c);
+                    loadCheckpoints(conn, id, world, c);
+                    loadTimes(conn, id, c);
+
+                    list.add(c);
+                    loaded++;
+                    plugin.getLogger().info("Loaded parkour '" + name + "' in world '" + worldName + "'.");
+                } catch (Exception rowEx) {
+                    plugin.getLogger().warning("Skipping parkour '" + name + "' due to invalid data: " + rowEx.getMessage());
+                }
             }
+
+            plugin.getLogger().info("Course loading summary: " + loaded + " loaded, " + skipped + " skipped.");
         } catch (SQLException e) {
             plugin.getLogger().severe("Failed to load parkours from DB: " + e.getMessage());
         }
@@ -97,8 +110,7 @@ public class SqliteParkourStorage {
             Double x = getNullableDouble(rs, prefix + "holo_x");
             Double y = getNullableDouble(rs, prefix + "holo_y");
             Double z = getNullableDouble(rs, prefix + "holo_z");
-            if (x != null && y != null && z != null)
-                setter.accept(new Location(world, x, y, z));
+            if (x != null && y != null && z != null) setter.accept(new Location(world, x, y, z));
         }
     }
 
@@ -116,7 +128,8 @@ public class SqliteParkourStorage {
     }
 
     private void loadCheckpoints(Connection conn, int parkourId, World world, ParkourCourse c) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM checkpoints WHERE parkour_id=? ORDER BY ord ASC")) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT * FROM checkpoints WHERE parkour_id=? ORDER BY ord ASC")) {
             ps.setInt(1, parkourId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -131,14 +144,16 @@ public class SqliteParkourStorage {
                     if (px == null || py == null || pz == null || rx == null || ry == null || rz == null) continue;
                     float yaw = ryaw == null ? 0f : ryaw.floatValue();
                     float pitch = rpitch == null ? 0f : rpitch.floatValue();
-                    c.addCheckpoint(new Checkpoint(new Location(world, px, py, pz), new Location(world, rx, ry, rz, yaw, pitch)));
+                    c.addCheckpoint(new Checkpoint(new Location(world, px, py, pz),
+                            new Location(world, rx, ry, rz, yaw, pitch)));
                 }
             }
         }
     }
 
     public void loadTimes(Connection conn, int parkourId, ParkourCourse c) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT uuid, best_nanos FROM times WHERE parkour_id=?")) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT uuid, best_nanos FROM times WHERE parkour_id=?")) {
             ps.setInt(1, parkourId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -177,7 +192,7 @@ public class SqliteParkourStorage {
             Object obj = rs.getObject(column);
             if (obj == null) return null;
             if (obj instanceof Number n) return n.doubleValue();
-            if (obj instanceof String s) try { return Double.parseDouble(s); } catch (NumberFormatException ex) { return null; }
+            if (obj instanceof String s) { try { return Double.parseDouble(s); } catch (NumberFormatException ex) { return null; } }
             return null;
         } catch (SQLException ex) { return null; }
     }
@@ -187,7 +202,7 @@ public class SqliteParkourStorage {
             Object obj = rs.getObject(column);
             if (obj == null) return null;
             if (obj instanceof Number n) return n.intValue();
-            if (obj instanceof String s) try { return Integer.parseInt(s); } catch (NumberFormatException ex) { return null; }
+            if (obj instanceof String s) { try { return Integer.parseInt(s); } catch (NumberFormatException ex) { return null; } }
             return null;
         } catch (SQLException ex) { return null; }
     }
@@ -198,6 +213,186 @@ public class SqliteParkourStorage {
         if (c.getFinishTeleport() != null && c.getFinishTeleport().getWorld() != null)
             return c.getFinishTeleport().getWorld().getName();
         return plugin.getConfigManager().getPlayerWorldName();
+    }
+
+    /* =========================================================
+     *                        SAVE
+     * ========================================================= */
+    public void saveCourses(Map<String, ParkourCourse> courses) {
+        try (Connection conn = db.getConnection()) {
+            conn.setAutoCommit(false);
+            for (ParkourCourse c : courses.values()) {
+                int id = upsertCourse(conn, c);
+                saveExtras(conn, id, c);
+
+                // Creators (rewrite)
+                try (PreparedStatement del = conn.prepareStatement("DELETE FROM creators WHERE parkour_id=?")) {
+                    del.setInt(1, id);
+                    del.executeUpdate();
+                }
+                try (PreparedStatement ins = conn.prepareStatement(
+                        "INSERT INTO creators(parkour_id, uuid) VALUES(?,?)")) {
+                    for (UUID u : c.getCreators()) {
+                        ins.setInt(1, id);
+                        ins.setString(2, u.toString());
+                        ins.addBatch();
+                    }
+                    ins.executeBatch();
+                }
+
+                // Checkpoints (rewrite)
+                try (PreparedStatement delc = conn.prepareStatement("DELETE FROM checkpoints WHERE parkour_id=?")) {
+                    delc.setInt(1, id);
+                    delc.executeUpdate();
+                }
+                try (PreparedStatement insc = conn.prepareStatement(
+                        "INSERT INTO checkpoints(parkour_id, ord, plate_x, plate_y, plate_z, respawn_x, respawn_y, respawn_z, respawn_yaw, respawn_pitch) VALUES(?,?,?,?,?,?,?,?,?,?)")) {
+                    int ord = 0;
+                    for (Checkpoint cp : c.getCheckpoints()) {
+                        Location plate = cp.plateLocation();
+                        Location resp = cp.respawnLocation();
+                        insc.setInt(1, id);
+                        insc.setInt(2, ord++);
+                        insc.setDouble(3, plate.getX());
+                        insc.setDouble(4, plate.getY());
+                        insc.setDouble(5, plate.getZ());
+                        insc.setDouble(6, resp.getX());
+                        insc.setDouble(7, resp.getY());
+                        insc.setDouble(8, resp.getZ());
+                        insc.setDouble(9, resp.getYaw());
+                        insc.setDouble(10, resp.getPitch());
+                        insc.addBatch();
+                    }
+                    insc.executeBatch();
+                }
+
+                // Times (rewrite best per player)
+                try (PreparedStatement delt = conn.prepareStatement("DELETE FROM times WHERE parkour_id=?")) {
+                    delt.setInt(1, id);
+                    delt.executeUpdate();
+                }
+                try (PreparedStatement inst = conn.prepareStatement(
+                        "INSERT INTO times(parkour_id, uuid, best_nanos) VALUES(?,?,?)")) {
+                    for (Map.Entry<UUID, List<Long>> e : c.getTimes().entrySet()) {
+                        long best = e.getValue().stream().min(Long::compareTo).orElse(Long.MAX_VALUE);
+                        if (best == Long.MAX_VALUE) continue;
+                        inst.setInt(1, id);
+                        inst.setString(2, e.getKey().toString());
+                        inst.setLong(3, best);
+                        inst.addBatch();
+                    }
+                    inst.executeBatch();
+                }
+            }
+            conn.commit();
+        } catch (SQLException e) {
+            plugin.getLogger().severe("Failed to save parkours to DB: " + e.getMessage());
+        }
+    }
+
+    private int upsertCourse(Connection conn, ParkourCourse c) throws SQLException {
+        Integer id = getCourseId(conn, c.getName());
+        if (id == null) {
+            // 21 placeholders, keep order in bindCourse()
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO parkours(" +
+                            "name, world, " +
+                            "start_x, start_y, start_z, start_yaw, start_pitch, " +
+                            "start_plate_x, start_plate_y, start_plate_z, " +
+                            "finish_x, finish_y, finish_z, finish_yaw, finish_pitch, " +
+                            "finish_plate_x, finish_plate_y, finish_plate_z, " +
+                            "difficulty, reward, published" +
+                            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    Statement.RETURN_GENERATED_KEYS)) {
+                bindCourse(ps, c);
+                ps.executeUpdate();
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    if (rs.next()) return rs.getInt(1);
+                }
+            }
+            return Objects.requireNonNull(getCourseId(conn, c.getName()));
+        } else {
+            // 20 setters + WHERE id=?
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE parkours SET " +
+                            "world=?, " +
+                            "start_x=?, start_y=?, start_z=?, start_yaw=?, start_pitch=?, " +
+                            "start_plate_x=?, start_plate_y=?, start_plate_z=?, " +
+                            "finish_x=?, finish_y=?, finish_z=?, finish_yaw=?, finish_pitch=?, " +
+                            "finish_plate_x=?, finish_plate_y=?, finish_plate_z=?, " +
+                            "difficulty=?, reward=?, published=? " +
+                            "WHERE id=?")) {
+                bindCourseUpdate(ps, c);
+                ps.setInt(21, id);
+                ps.executeUpdate();
+                return id;
+            }
+        }
+    }
+
+    private void bindCourse(PreparedStatement ps, ParkourCourse c) throws SQLException {
+        // Explicit indices to guarantee correct binding order for INSERT with 21 placeholders
+        // 1 name, 2 world,
+        // 3-7 start_x,start_y,start_z,start_yaw,start_pitch
+        // 8-10 start_plate_x,start_plate_y,start_plate_z
+        // 11-15 finish_x,finish_y,finish_z,finish_yaw,finish_pitch
+        // 16-18 finish_plate_x,finish_plate_y,finish_plate_z
+        // 19 difficulty, 20 reward, 21 published
+        ps.setString(1, c.getName());                 // name
+        ps.setString(2, resolveWorld(c));             // world (STRING)
+        writeLocation(ps, 3, c.getStartTeleport());   // 3..7
+        writeBlock(ps, 8, c.getStartPlate());         // 8..10
+        writeLocation(ps, 11, c.getFinishTeleport()); // 11..15
+        writeBlock(ps, 16, c.getFinishPlate());       // 16..18
+        if (c.getStaffDifficulty() != null) ps.setInt(19, c.getStaffDifficulty()); else ps.setNull(19, Types.INTEGER); // difficulty
+        ps.setNull(20, Types.INTEGER);                 // reward (unknown in model -> NULL int)
+        ps.setInt(21, c.isPublished() ? 1 : 0);        // published
+    }
+
+    private void bindCourseUpdate(PreparedStatement ps, ParkourCourse c) throws SQLException {
+        // Explicit indices for UPDATE parameter order (20 setters)
+        // 1 world,
+        // 2-6 start_x,start_y,start_z,start_yaw,start_pitch
+        // 7-9 start_plate_x,start_plate_y,start_plate_z
+        // 10-14 finish_x,finish_y,finish_z,finish_yaw,finish_pitch
+        // 15-17 finish_plate_x,finish_plate_y,finish_plate_z
+        // 18 difficulty, 19 reward, 20 published
+        ps.setString(1, resolveWorld(c));             // world (STRING)
+        writeLocation(ps, 2, c.getStartTeleport());   // 2..6
+        writeBlock(ps, 7, c.getStartPlate());         // 7..9
+        writeLocation(ps, 10, c.getFinishTeleport()); // 10..14
+        writeBlock(ps, 15, c.getFinishPlate());       // 15..17
+        if (c.getStaffDifficulty() != null) ps.setInt(18, c.getStaffDifficulty()); else ps.setNull(18, Types.INTEGER); // difficulty
+        ps.setNull(19, Types.INTEGER);                 // reward (unknown in model -> NULL int)
+        ps.setInt(20, c.isPublished() ? 1 : 0);        // published
+    }
+
+    private void saveExtras(Connection conn, int id, ParkourCourse c) {
+        // Optional columns: ignore if schema doesn't have them
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE parkours SET " +
+                        "plot_min_x=?, plot_min_z=?, plot_size=?, " +
+                        "top_holo_x=?, top_holo_y=?, top_holo_z=?, " +
+                        "best_holo_x=?, best_holo_y=?, best_holo_z=?, " +
+                        "creator_holo_x=?, creator_holo_y=?, creator_holo_z=? " +
+                        "WHERE id=?")) {
+            if (c.getPlotRegion() != null) {
+                ps.setInt(1, c.getPlotRegion().minX());
+                ps.setInt(2, c.getPlotRegion().minZ());
+                ps.setInt(3, c.getPlotRegion().size());
+            } else {
+                ps.setNull(1, Types.INTEGER);
+                ps.setNull(2, Types.INTEGER);
+                ps.setNull(3, Types.INTEGER);
+            }
+            writeBlock(ps, 4, c.getTopHologramLocation());
+            writeBlock(ps, 7, c.getBestHologramLocation());
+            writeBlock(ps, 10, c.getCreatorHologramLocation());
+            ps.setInt(13, id);
+            ps.executeUpdate();
+        } catch (SQLException ignored) {
+            // If columns don't exist (older schema), just skip without failing the whole save.
+        }
     }
 
     private void writeLocation(PreparedStatement ps, int startIndex, Location loc) throws SQLException {
@@ -235,6 +430,119 @@ public class SqliteParkourStorage {
                 if (rs.next()) return rs.getInt(1);
                 return null;
             }
+        }
+    }
+
+    /* =========================================================
+     *                  TIMES: ASYNC LOAD/SAVE
+     * ========================================================= */
+    public void loadTimesForCourseAsync(String courseName, BiConsumer<ParkourCourse, Boolean> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean ok = true;
+            ParkourCourse course = plugin.getParkourManager().getCourse(courseName);
+            if (course == null) ok = false;
+
+            Map<UUID, List<Long>> loaded = new HashMap<>();
+            try (Connection conn = db.getConnection()) {
+                Integer id = (course != null) ? getCourseId(conn, courseName) : null;
+                if (id == null || course == null) {
+                    ok = false;
+                } else {
+                    try (PreparedStatement ps = conn.prepareStatement(
+                            "SELECT uuid, best_nanos FROM times WHERE parkour_id=?")) {
+                        ps.setInt(1, id);
+                        try (ResultSet rs = ps.executeQuery()) {
+                            while (rs.next()) {
+                                try {
+                                    UUID u = UUID.fromString(rs.getString(1));
+                                    long best = rs.getLong(2);
+                                    loaded.put(u, List.of(best));
+                                } catch (IllegalArgumentException ignored) {}
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                ok = false;
+                plugin.getLogger().warning("Failed to load times: " + e.getMessage());
+            }
+
+            boolean success = ok;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (course != null) {
+                    course.getTimes().clear();
+                    course.getTimes().putAll(loaded);
+                }
+                callback.accept(course, success);
+            });
+        });
+    }
+
+    public void saveTimesAsync(ParkourCourse course) {
+        // Snapshot on main thread, write async
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Map<UUID, List<Long>> snapshot = new HashMap<>();
+            for (Map.Entry<UUID, List<Long>> e : course.getTimes().entrySet()) {
+                snapshot.put(e.getKey(), new ArrayList<>(e.getValue()));
+            }
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try (Connection conn = db.getConnection()) {
+                    conn.setAutoCommit(false);
+                    Integer id = getCourseId(conn, course.getName());
+                    if (id != null) {
+                        try (PreparedStatement del = conn.prepareStatement("DELETE FROM times WHERE parkour_id=?")) {
+                            del.setInt(1, id);
+                            del.executeUpdate();
+                        }
+                        try (PreparedStatement ins = conn.prepareStatement(
+                                "INSERT INTO times(parkour_id, uuid, best_nanos) VALUES(?,?,?)")) {
+                            for (Map.Entry<UUID, List<Long>> e : snapshot.entrySet()) {
+                                long best = e.getValue().stream().min(Long::compareTo).orElse(Long.MAX_VALUE);
+                                if (best == Long.MAX_VALUE) continue;
+                                ins.setInt(1, id);
+                                ins.setString(2, e.getKey().toString());
+                                ins.setLong(3, best);
+                                ins.addBatch();
+                            }
+                            ins.executeBatch();
+                        }
+                    }
+                    conn.commit();
+                } catch (SQLException e) {
+                    plugin.getLogger().warning("Failed to save times: " + e.getMessage());
+                }
+            });
+        });
+    }
+
+    /* =========================================================
+     *                 DATA CLEANUP / MIGRATION
+     * ========================================================= */
+    public void cleanupInvalidNumericColumns() {
+        String[] numericCols = new String[]{
+                "start_x","start_y","start_z","start_yaw","start_pitch",
+                "start_plate_x","start_plate_y","start_plate_z",
+                "finish_x","finish_y","finish_z","finish_yaw","finish_pitch",
+                "finish_plate_x","finish_plate_y","finish_plate_z",
+                "plot_min_x","plot_min_z","plot_size",
+                "top_holo_x","top_holo_y","top_holo_z",
+                "best_holo_x","best_holo_y","best_holo_z",
+                "creator_holo_x","creator_holo_y","creator_holo_z",
+                "difficulty","published"
+        };
+        try (Connection conn = db.getConnection()) {
+            conn.setAutoCommit(false);
+            for (String col : numericCols) {
+                // If column missing, ignore error
+                try (Statement st = conn.createStatement()) {
+                    String sql = "UPDATE parkours SET " + col + " = NULL " +
+                            "WHERE typeof(" + col + ") NOT IN ('integer','real','null')";
+                    st.executeUpdate(sql);
+                } catch (SQLException ignoreIfMissing) {}
+            }
+            conn.commit();
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Cleanup of invalid numeric columns failed: " + e.getMessage());
         }
     }
 }

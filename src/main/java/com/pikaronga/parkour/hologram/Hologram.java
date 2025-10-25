@@ -2,6 +2,7 @@ package com.pikaronga.parkour.hologram;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -29,6 +30,8 @@ public class Hologram {
         this.identifier = identifier;
     }
 
+    
+
     public void spawn(List<String> lines) {
         despawn();
         World world = baseLocation.getWorld();
@@ -49,6 +52,7 @@ public class Hologram {
             armorStands.add(stand);
             current = current.clone().add(0, -LINE_SPACING, 0);
         }
+        
     }
 
     public void update(List<String> lines) {
@@ -105,19 +109,72 @@ public class Hologram {
     }
 
     private ArmorStand spawnLine(World world, Location location, String line) {
-        ArmorStand stand = (ArmorStand) world.spawnEntity(location, EntityType.ARMOR_STAND);
-        stand.setGravity(false);
-        stand.setMarker(true);
-        stand.setInvisible(true);
-        stand.setCustomNameVisible(true);
-        applyName(stand, line);
-        stand.setBasePlate(false);
-        stand.setSmall(true);
-        stand.setPersistent(true);
-        stand.setInvulnerable(true);
-        stand.setSilent(true);
-        return stand;
+        try {
+            // Ensure chunk is loaded before spawning
+            try {
+                if (!location.getChunk().isLoaded()) location.getChunk().load();
+            } catch (Throwable ignored) {}
+
+            ArmorStand stand = world.spawn(location, ArmorStand.class, a -> {
+                // body invisible, name visible
+                a.setInvisible(true);
+                // Do NOT set marker=true here; some server builds hide nameplates for marker armor stands.
+                a.setSmall(true);
+                a.setGravity(false);
+                a.setPersistent(true);
+                a.setBasePlate(false);
+                a.setInvulnerable(true);
+                a.setSilent(true);
+                // We'll explicitly set name visible after applying the Component name to ensure clients render it.
+            });
+
+            if (stand == null) return null;
+
+            // Apply the name using existing helper (handles Adventure and legacy fallback)
+            applyName(stand, line);
+            // Ensure the custom name is visible (set after applying the name to force client update)
+            try { stand.setCustomNameVisible(true); } catch (Throwable ignored) {}
+
+            // Debug logging: world, coords, name visibility, invisibility, custom name contents
+            try {
+                String worldName = (world != null && world.getName() != null) ? world.getName() : "unknown";
+                String coords = String.format("[%.2f, %.2f, %.2f]", location.getX(), location.getY(), location.getZ());
+                boolean nameVisible = stand.isCustomNameVisible();
+                boolean invisible = stand.isInvisible();
+                String cname = "null";
+                try {
+                    if (stand.customName() != null) {
+                        cname = LegacyComponentSerializer.legacySection().serialize(stand.customName());
+                    }
+                } catch (Throwable ignored) {}
+                Bukkit.getLogger().info("[Parkour] Spawned hologram '" + identifier + "' at " + worldName + coords + " (nameVisible=" + nameVisible + ", invisible=" + invisible + ", name=" + cname + ")");
+            } catch (Throwable ignored) {}
+
+            // No ProtocolLib resend here; rely on Bukkit/Paper entity metadata propagation.
+
+            return stand;
+        } catch (Throwable t) {
+            try {
+                // fallback: spawning via entity type
+                ArmorStand stand = (ArmorStand) world.spawnEntity(location, EntityType.ARMOR_STAND);
+                stand.setGravity(false);
+                stand.setMarker(true);
+                stand.setInvisible(true);
+                stand.setCustomNameVisible(true);
+                applyName(stand, line);
+                stand.setBasePlate(false);
+                stand.setSmall(true);
+                stand.setPersistent(true);
+                stand.setInvulnerable(true);
+                stand.setSilent(true);
+                return stand;
+            } catch (Throwable ex) {
+                return null;
+            }
+        }
     }
+
+    // No ProtocolLib present at compile time; we use a hide/show-with-delay per-player workaround instead.
 
     private void markStand(ArmorStand stand, int index) {
         try {
@@ -138,7 +195,8 @@ public class Hologram {
             stand.customName(name);
         } catch (Throwable t) {
             try {
-                stand.setCustomName(text);
+                // Fallback to a plain text Component if parsing failed
+                stand.customName(Component.text(text));
             } catch (Throwable ignored) {
             }
         }
@@ -149,7 +207,7 @@ public class Hologram {
             stand.customName(Component.space());
         } catch (Throwable t) {
             try {
-                stand.setCustomName(" ");
+                stand.customName(Component.space());
             } catch (Throwable ignored) {
             }
         }
