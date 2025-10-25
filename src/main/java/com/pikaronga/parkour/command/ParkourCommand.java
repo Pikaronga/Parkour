@@ -239,6 +239,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     }
                 } catch (Exception ignored) { }
                 c.setPublished(true);
+                plugin.getHologramManager().createHolograms(c);
                 player.sendMessage(messageManager.getMessage("publish-success", "&aPublished parkour &f{course}&a.", Map.of("course", c.getName())));
             }
             case "browse" -> {

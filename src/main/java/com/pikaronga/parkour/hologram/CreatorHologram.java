@@ -4,9 +4,11 @@ import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class CreatorHologram {
@@ -14,9 +16,9 @@ public class CreatorHologram {
     private final Hologram hologram;
     private final HologramTextProvider textProvider;
 
-    public CreatorHologram(ParkourCourse course, Location location, HologramTextProvider textProvider) {
+    public CreatorHologram(ParkourCourse course, Location location, HologramTextProvider textProvider, NamespacedKey hologramKey) {
         this.course = course;
-        this.hologram = new Hologram(location);
+        this.hologram = new Hologram(location, hologramKey, identifier(course));
         this.textProvider = textProvider;
         List<String> lines = new ArrayList<>();
         lines.add(textProvider.formatCreatorsHeader(course.getName()));
@@ -53,5 +55,13 @@ public class CreatorHologram {
 
     public void destroy() {
         hologram.despawn();
+    }
+
+    private String identifier(ParkourCourse course) {
+        return "creator:" + course.getName().toLowerCase(Locale.ROOT);
+    }
+
+    public Location getBaseLocation() {
+        return hologram.getBaseLocation();
     }
 }
