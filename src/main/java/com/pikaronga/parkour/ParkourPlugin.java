@@ -42,7 +42,7 @@ public class ParkourPlugin extends JavaPlugin {
         DatabaseManager db = new DatabaseManager(this);
         this.storage = new SqliteParkourStorage(this, db);
         try { this.storage.cleanupInvalidNumericColumns(); } catch (Throwable ignored) {}
-        this.parkourManager = new ParkourManager(storage.loadCourses());
+        this.parkourManager = new ParkourManager(java.util.Collections.emptyList());
         this.cacheManager = new ParkourCacheManager(this, storage);
         this.messageManager = new MessageManager(this);
         this.guiConfig = new GuiConfig(this);
@@ -50,6 +50,8 @@ public class ParkourPlugin extends JavaPlugin {
         this.sessionManager = new SessionManager(this, messageManager);
         this.hologramKey = new NamespacedKey(this, "parkour_holo_id");
         this.hologramManager = new HologramManager(this, parkourManager, hologramTextProvider, hologramKey);
+
+        PlayerParkourManager.ensureWorld(this, configManager);
 
         // Safety sweep: purge stray hologram armor stands with tag
         try {
@@ -78,15 +80,24 @@ public class ParkourPlugin extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(new BuildProtectionListener(playerParkourManager), this);
             Bukkit.getPluginManager().registerEvents(new PlotWorldListener(playerParkourManager), this);
             Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager, messageManager, playerParkourManager), this);
-            // Draw outlines for existing plots if enabled
-            playerParkourManager.redrawAllOutlines();
         } else {
             // Register without player-parkour testing support
             Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager, messageManager, null), this);
         }
 
-        Bukkit.getScheduler().runTaskLater(this, () -> hologramManager.spawnConfiguredHolograms(), 20L);
-        getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            getLogger().info("Loading parkour data after world bootstrap...");
+            java.util.List<com.pikaronga.parkour.course.ParkourCourse> courses = storage.loadCourses();
+            parkourManager.replaceCourses(courses);
+            if (playerParkourManager != null) {
+                playerParkourManager.refreshPlotUsage();
+                if (configManager.outlineEnabled() && !configManager.isVoidWorld()) {
+                    playerParkourManager.redrawAllOutlines();
+                }
+            }
+            hologramManager.spawnConfiguredHolograms();
+            getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
+        }, 20L);
     }
 
     @Override

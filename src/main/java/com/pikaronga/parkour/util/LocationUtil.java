@@ -11,8 +11,16 @@ public final class LocationUtil {
     }
 
     public static boolean isSameBlock(Location a, Location b) {
-        return a.getWorld().equals(b.getWorld())
-                && a.getBlockX() == b.getBlockX()
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getWorld() == null || b.getWorld() == null) {
+            return false;
+        }
+        if (!a.getWorld().equals(b.getWorld())) {
+            return false;
+        }
+        return a.getBlockX() == b.getBlockX()
                 && a.getBlockY() == b.getBlockY()
                 && a.getBlockZ() == b.getBlockZ();
     }

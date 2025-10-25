@@ -24,6 +24,16 @@ public class ParkourManager {
         }
     }
 
+    public void replaceCourses(Collection<ParkourCourse> loadedCourses) {
+        courses.clear();
+        if (loadedCourses == null) {
+            return;
+        }
+        for (ParkourCourse course : loadedCourses) {
+            courses.put(course.getName().toLowerCase(), course);
+        }
+    }
+
     public Map<String, ParkourCourse> getCourses() {
         return courses;
     }

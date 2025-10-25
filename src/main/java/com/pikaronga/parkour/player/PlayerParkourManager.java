@@ -29,13 +29,9 @@ public class PlayerParkourManager {
         this.plugin = plugin;
         this.config = config;
         this.parkourManager = parkourManager;
-        ensureWorld();
+        ensureWorld(plugin, config);
         // Pre-mark used plots from existing courses
-        for (ParkourCourse c : parkourManager.getCourses().values()) {
-            if (c.getPlotRegion() != null) {
-                usedChunks.add(key(c.getPlotRegion().minX(), c.getPlotRegion().minZ()));
-            }
-        }
+        refreshPlotUsage();
     }
 
     public World getWorld() {
@@ -119,10 +115,12 @@ public class PlayerParkourManager {
         return name != null && course != null && course.getName().equalsIgnoreCase(name);
     }
 
-    private void ensureWorld() {
+    public static void ensureWorld(ParkourPlugin plugin, ConfigManager config) {
         String worldName = config.getPlayerWorldName();
         World world = Bukkit.getWorld(worldName);
-        if (world != null) return;
+        if (world != null) {
+            return;
+        }
 
         // Pre-create world folder and ensure any JSON files we rely on are valid (non-empty)
         java.io.File container = Bukkit.getWorldContainer();
@@ -164,6 +162,16 @@ public class PlayerParkourManager {
             wc.generatorSettings(flatJson);
         }
         Bukkit.createWorld(wc);
+        plugin.getLogger().info("Ensured player parkour world '" + worldName + "' is loaded.");
+    }
+
+    public void refreshPlotUsage() {
+        usedChunks.clear();
+        for (ParkourCourse c : parkourManager.getCourses().values()) {
+            if (c.getPlotRegion() != null) {
+                usedChunks.add(key(c.getPlotRegion().minX(), c.getPlotRegion().minZ()));
+            }
+        }
     }
 
     private static class VoidChunkGenerator extends org.bukkit.generator.ChunkGenerator {

@@ -52,6 +52,9 @@ public class PersonalBestHologram {
         try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
         headerStand = (ArmorStand) world.spawnEntity(baseLocation, EntityType.ARMOR_STAND);
         configureStand(headerStand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
+        if (headerStand != null) {
+            plugin.getLogger().info("Spawned personal best header hologram for '" + course.getName() + "' at " + formatLocation(headerStand.getLocation()) + " (entity=" + headerStand.getUniqueId() + ")");
+        }
     }
 
     private ArmorStand spawnPersonalLine() {
@@ -63,6 +66,9 @@ public class PersonalBestHologram {
         ArmorStand stand = (ArmorStand) world.spawnEntity(baseLocation.clone().add(0, -0.3, 0), EntityType.ARMOR_STAND);
         configureStand(stand, textProvider.formatBestEmpty(course.getName()), "");
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
+        if (stand != null) {
+            plugin.getLogger().fine("Spawned personal best line hologram for '" + course.getName() + "' at " + formatLocation(stand.getLocation()) + " (entity=" + stand.getUniqueId() + ")");
+        }
         return stand;
     }
 
@@ -144,6 +150,17 @@ public class PersonalBestHologram {
 
     public Location getBaseLocation() {
         return baseLocation;
+    }
+
+    public java.util.Optional<UUID> getHeaderEntityId() {
+        return headerStand == null ? java.util.Optional.empty() : java.util.Optional.of(headerStand.getUniqueId());
+    }
+
+    private String formatLocation(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return "unknown";
+        }
+        return location.getWorld().getName() + String.format("[%.2f, %.2f, %.2f]", location.getX(), location.getY(), location.getZ());
     }
 
     private void applyIdentifier(ArmorStand stand, String identifier) {
