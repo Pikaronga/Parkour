@@ -14,9 +14,11 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.UUID;
 import java.util.logging.Level;
 
 public class HologramManager implements Listener {
@@ -87,6 +89,9 @@ public class HologramManager implements Listener {
         Location location = course.getTopHologramLocation();
         Hologram top = topHolograms.get(key);
         if (location != null) {
+            if (!isLocationReady(location, course, "top")) {
+                return;
+            }
             int limit = course.getCreators().isEmpty() ? 10 : plugin.getConfigManager().getTopHologramSize();
             java.util.List<String> lines = course.createTopLinesWithLimit(textProvider, limit);
             boolean respawn = forceRespawn || top == null || !isSameLocation(top.getBaseLocation(), location);
@@ -98,6 +103,7 @@ public class HologramManager implements Listener {
                 Hologram hologram = new Hologram(location, hologramKey, identifierFor(course.getName(), "top"));
                 hologram.spawn(lines);
                 topHolograms.put(key, hologram);
+                logHologramSpawn("top", course, location, hologram.getArmorStandEntityIds());
                 log(Level.INFO, "Spawned top hologram for course " + course.getName() + ".");
             } else {
                 top.update(lines);
@@ -114,6 +120,9 @@ public class HologramManager implements Listener {
         Location location = course.getBestHologramLocation();
         PersonalBestHologram best = bestHolograms.get(key);
         if (location != null) {
+            if (!isLocationReady(location, course, "personal best")) {
+                return;
+            }
             boolean respawn = forceRespawn || best == null || !isSameLocation(best.getBaseLocation(), location);
             if (respawn) {
                 if (best != null) {
@@ -122,6 +131,7 @@ public class HologramManager implements Listener {
                 }
                 PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location, textProvider, hologramKey);
                 bestHolograms.put(key, hologram);
+                hologram.getHeaderEntityId().ifPresent(id -> log(Level.INFO, "Spawned personal best hologram for course " + course.getName() + " at " + formatLocation(location) + " (header=" + id + ")"));
                 log(Level.INFO, "Spawned personal best hologram for course " + course.getName() + ".");
             } else {
                 Bukkit.getOnlinePlayers().forEach(best::updateFor);
@@ -138,6 +148,9 @@ public class HologramManager implements Listener {
         Location location = course.getCreatorHologramLocation();
         CreatorHologram creator = creatorHolograms.get(key);
         if (location != null) {
+            if (!isLocationReady(location, course, "creator")) {
+                return;
+            }
             Location existing = creator != null ? creator.getBaseLocation() : null;
             boolean respawn = forceRespawn || creator == null || !isSameLocation(existing, location);
             if (respawn) {
@@ -147,6 +160,7 @@ public class HologramManager implements Listener {
                 }
                 CreatorHologram hologram = new CreatorHologram(course, location, textProvider, hologramKey);
                 creatorHolograms.put(key, hologram);
+                logHologramSpawn("creator", course, location, hologram.getEntityIds());
                 log(Level.INFO, "Spawned creator hologram for course " + course.getName() + ".");
             } else {
                 creator.update();
@@ -254,5 +268,28 @@ public class HologramManager implements Listener {
 
     private void log(Level level, String message) {
         plugin.getLogger().log(level, message);
+    }
+
+    private boolean isLocationReady(Location location, ParkourCourse course, String type) {
+        if (location.getWorld() == null) {
+            log(Level.WARNING, "Cannot spawn " + type + " hologram for course '" + course.getName() + "': world is not loaded.");
+            return false;
+        }
+        return true;
+    }
+
+    private void logHologramSpawn(String type, ParkourCourse course, Location location, List<UUID> entityIds) {
+        if (entityIds == null || entityIds.isEmpty()) {
+            log(Level.INFO, "Spawned " + type + " hologram for course " + course.getName() + " at " + formatLocation(location) + " (no entities spawned)");
+            return;
+        }
+        log(Level.INFO, "Spawned " + type + " hologram for course " + course.getName() + " at " + formatLocation(location) + " (entities=" + entityIds + ")");
+    }
+
+    private String formatLocation(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return "unknown";
+        }
+        return location.getWorld().getName() + String.format("[%.2f, %.2f, %.2f]", location.getX(), location.getY(), location.getZ());
     }
 }

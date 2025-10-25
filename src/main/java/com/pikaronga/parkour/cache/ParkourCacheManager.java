@@ -6,6 +6,7 @@ import com.pikaronga.parkour.storage.SqliteParkourStorage;
 import org.bukkit.Bukkit;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -92,5 +93,10 @@ public class ParkourCacheManager {
         Cached c = cache.computeIfAbsent(key, k -> new Cached(course));
         c.dirty.set(true);
         c.lastAccess = System.currentTimeMillis();
+    }
+
+    public void recordTime(ParkourCourse course, UUID playerId, long nanos) {
+        course.addTime(playerId, nanos);
+        markDirty(course);
     }
 }

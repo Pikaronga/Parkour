@@ -64,4 +64,8 @@ public class CreatorHologram {
     public Location getBaseLocation() {
         return hologram.getBaseLocation();
     }
+
+    public List<UUID> getEntityIds() {
+        return hologram.getArmorStandEntityIds();
+    }
 }
