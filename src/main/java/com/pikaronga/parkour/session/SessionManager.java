@@ -4,6 +4,8 @@ import com.pikaronga.parkour.ParkourPlugin;
 import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.TimeUtil;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -17,6 +19,8 @@ import java.util.Map;
 import java.util.UUID;
 
 public class SessionManager {
+
+    private static final String WORLD_NOT_LOADED_MESSAGE = ChatColor.RED + "That parkour's world isn't currently loaded.";
 
     private final ParkourPlugin plugin;
     private final Map<UUID, ParkourSession> sessions = new HashMap<>();
@@ -36,9 +40,20 @@ public class SessionManager {
     public ParkourSession startSession(Player player, ParkourCourse course, boolean teleportToStart) {
         try { plugin.getCacheManager().startUsing(course); } catch (Throwable ignored) {}
         ParkourSession existing = sessions.get(player.getUniqueId());
-        Location startTeleport = course.getStartTeleport();
+        Location startTeleport = cloneLocation(course.getStartTeleport());
         if (startTeleport == null && course.getStartPlate() != null) {
-            startTeleport = course.getStartPlate().clone().add(0.5, 0, 0.5);
+            Location startPlate = course.getStartPlate();
+            if (startPlate.getWorld() != null) {
+                startTeleport = startPlate.clone().add(0.5, 0, 0.5);
+            } else {
+                plugin.getLogger().warning(String.format(
+                        "Start plate for parkour '%s' has no loaded world (location: %s).",
+                        course.getName(),
+                        formatLocation(startPlate)));
+            }
+        }
+        if (startTeleport != null && !ensureWorldLoaded(startTeleport, course, "start teleport", player, true)) {
+            return null;
         }
         if (existing != null && existing.getCourse().equals(course)) {
             existing.restoreInventory();
@@ -50,7 +65,7 @@ public class SessionManager {
             giveParkourItems(player);
             if (startTeleport != null) {
                 if (teleportToStart) {
-                    player.teleport(startTeleport);
+                    teleportPlayer(player, startTeleport, course, "start teleport", false);
                 }
                 existing.setLastCheckpoint(startTeleport);
             }
@@ -71,7 +86,7 @@ public class SessionManager {
         giveParkourItems(player);
         if (startTeleport != null) {
             if (teleportToStart) {
-                player.teleport(startTeleport);
+                teleportPlayer(player, startTeleport, course, "start teleport", false);
             }
             session.setLastCheckpoint(startTeleport);
         }
@@ -146,9 +161,9 @@ public class SessionManager {
         } else {
             session.getPlayer().sendMessage(messageManager.getMessage("left-parkour", "&cYou have left the parkour."));
         }
-        Location completionSpawn = session.getCourse().getFinishTeleport();
+        Location completionSpawn = cloneLocation(session.getCourse().getFinishTeleport());
         if (teleportToFinish && completionSpawn != null) {
-            session.getPlayer().teleport(completionSpawn);
+            teleportPlayer(session.getPlayer(), completionSpawn, session.getCourse(), "finish teleport", true);
         }
     }
 
@@ -161,18 +176,19 @@ public class SessionManager {
         long durationNanos = System.nanoTime() - session.getStartTimeNanos();
         if (session.isTestMode()) {
             // Test sessions do not update leaderboards or holograms
-            player.sendMessage(messageManager.getMessage("test-completed", "&eTest completed in &f{time}&e.", java.util.Map.of("time", com.pikaronga.parkour.util.TimeUtil.formatDuration(durationNanos))));
+            player.sendMessage(messageManager.getMessage("test-completed", "&eTest completed in &f{time}&e.", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
         } else {
             session.getCourse().addTime(player.getUniqueId(), durationNanos);
             try { plugin.getCacheManager().markDirty(session.getCourse()); } catch (Throwable ignored) {}
         }
-        if (session.getCourse().getFinishTeleport() != null) {
-            player.teleport(session.getCourse().getFinishTeleport());
+        Location finishTeleport = cloneLocation(session.getCourse().getFinishTeleport());
+        if (finishTeleport != null) {
+            teleportPlayer(player, finishTeleport, session.getCourse(), "finish teleport", true);
         }
         if (!session.isTestMode()) {
             player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
             plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
-            plugin.getHologramManager().updateHolograms(session.getCourse());
+            Bukkit.getScheduler().runTask(plugin, () -> plugin.getHologramManager().updateHolograms(session.getCourse()));
         }
         try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
         return durationNanos;
@@ -188,13 +204,16 @@ public class SessionManager {
             player.sendMessage(messageManager.getMessage("not-in-parkour", "&cYou are not in a parkour."));
             return;
         }
-        Location start = session.getCourse().getStartTeleport();
+        Location start = cloneLocation(session.getCourse().getStartTeleport());
         if (start == null) {
             player.sendMessage(messageManager.getMessage("start-not-configured", "&cStart location is not configured."));
             return;
         }
+        if (!ensureWorldLoaded(start, session.getCourse(), "start teleport", player, true)) {
+            return;
+        }
         session.markIgnoreNextStartPlate();
-        player.teleport(start);
+        teleportPlayer(player, start, session.getCourse(), "start teleport", false);
         session.setLastCheckpoint(start);
         session.resetTimer();
         player.sendMessage(messageManager.getMessage("restart-parkour", "&aRestarted the parkour and reset your timer."));
@@ -206,12 +225,15 @@ public class SessionManager {
             player.sendMessage(messageManager.getMessage("not-in-parkour", "&cYou are not in a parkour."));
             return;
         }
-        Location checkpoint = session.getLastCheckpoint();
+        Location checkpoint = cloneLocation(session.getLastCheckpoint());
         if (checkpoint == null) {
             player.sendMessage(messageManager.getMessage("no-checkpoint", "&cNo checkpoint available."));
             return;
         }
-        player.teleport(checkpoint);
+        if (!ensureWorldLoaded(checkpoint, session.getCourse(), "checkpoint", player, true)) {
+            return;
+        }
+        teleportPlayer(player, checkpoint, session.getCourse(), "checkpoint", false);
         player.sendMessage(messageManager.getMessage("teleported-checkpoint", "&aTeleported to your latest checkpoint."));
     }
 
@@ -220,5 +242,53 @@ public class SessionManager {
             session.restoreInventory();
         }
         sessions.clear();
+    }
+
+    private Location cloneLocation(Location location) {
+        return location != null ? location.clone() : null;
+    }
+
+    private boolean ensureWorldLoaded(Location location, ParkourCourse course, String context, Player player, boolean notifyPlayer) {
+        if (location == null) {
+            return false;
+        }
+        if (location.getWorld() != null) {
+            return true;
+        }
+        String courseName = course != null ? course.getName() : "<unknown>";
+        plugin.getLogger().severe(String.format(
+                "Cannot use %s for parkour '%s': world is null (location: %s).",
+                context,
+                courseName,
+                formatLocation(location)));
+        if (notifyPlayer && player != null) {
+            player.sendMessage(WORLD_NOT_LOADED_MESSAGE);
+        }
+        return false;
+    }
+
+    private void teleportPlayer(Player player, Location location, ParkourCourse course, String context, boolean notifyPlayer) {
+        if (!ensureWorldLoaded(location, course, context, player, notifyPlayer)) {
+            return;
+        }
+        Location target = location.clone();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            boolean success = player.teleport(target);
+            if (!success) {
+                plugin.getLogger().warning(String.format(
+                        "Teleport for %s in parkour '%s' (%s) failed.",
+                        player.getName(),
+                        course != null ? course.getName() : "<unknown>",
+                        context));
+            }
+        });
+    }
+
+    private String formatLocation(Location location) {
+        if (location == null) {
+            return "unknown";
+        }
+        String worldName = location.getWorld() != null ? location.getWorld().getName() : "null";
+        return String.format("%s:(%.2f, %.2f, %.2f)", worldName, location.getX(), location.getY(), location.getZ());
     }
 }

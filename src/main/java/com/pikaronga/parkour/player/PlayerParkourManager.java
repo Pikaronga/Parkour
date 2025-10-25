@@ -30,10 +30,17 @@ public class PlayerParkourManager {
         this.config = config;
         this.parkourManager = parkourManager;
         ensureWorld();
-        // Pre-mark used plots from existing courses
-        for (ParkourCourse c : parkourManager.getCourses().values()) {
-            if (c.getPlotRegion() != null) {
-                usedChunks.add(key(c.getPlotRegion().minX(), c.getPlotRegion().minZ()));
+        refreshPlotUsage(parkourManager.getCourses().values());
+    }
+
+    public void refreshPlotUsage(java.util.Collection<ParkourCourse> courses) {
+        usedChunks.clear();
+        if (courses == null) {
+            return;
+        }
+        for (ParkourCourse course : courses) {
+            if (course != null && course.getPlotRegion() != null) {
+                usedChunks.add(key(course.getPlotRegion().minX(), course.getPlotRegion().minZ()));
             }
         }
     }
@@ -166,7 +173,7 @@ public class PlayerParkourManager {
         Bukkit.createWorld(wc);
     }
 
-    private static class VoidChunkGenerator extends org.bukkit.generator.ChunkGenerator {
+    public static class VoidChunkGenerator extends org.bukkit.generator.ChunkGenerator {
         @Override
         public ChunkData generateChunkData(World world, java.util.Random random, int x, int z, BiomeGrid biome) {
             return createChunkData(world); // empty

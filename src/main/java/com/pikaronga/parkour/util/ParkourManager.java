@@ -17,15 +17,20 @@ public class ParkourManager {
     private final Map<String, ParkourCourse> courses = new HashMap<>();
 
     public ParkourManager(Collection<ParkourCourse> loadedCourses) {
+        replaceCourses(loadedCourses);
+    }
+
+    public Map<String, ParkourCourse> getCourses() {
+        return courses;
+    }
+
+    public void replaceCourses(Collection<ParkourCourse> loadedCourses) {
+        courses.clear();
         if (loadedCourses != null) {
             for (ParkourCourse course : loadedCourses) {
                 courses.put(course.getName().toLowerCase(), course);
             }
         }
-    }
-
-    public Map<String, ParkourCourse> getCourses() {
-        return courses;
     }
 
     public ParkourCourse getOrCreate(String name) {

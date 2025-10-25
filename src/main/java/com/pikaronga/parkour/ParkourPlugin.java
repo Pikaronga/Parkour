@@ -12,15 +12,20 @@ import com.pikaronga.parkour.session.SessionManager;
 import com.pikaronga.parkour.storage.SqliteParkourStorage;
 import com.pikaronga.parkour.storage.DatabaseManager;
 import com.pikaronga.parkour.cache.ParkourCacheManager;
+import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.ParkourManager;
 import com.pikaronga.parkour.player.PlayerParkourManager;
 import com.pikaronga.parkour.player.BuildProtectionListener;
 import com.pikaronga.parkour.player.PlotWorldListener;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.WorldCreator;
+import org.bukkit.WorldType;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.Collections;
 
 public class ParkourPlugin extends JavaPlugin {
 
@@ -39,10 +44,11 @@ public class ParkourPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         this.configManager = new ConfigManager(this);
+        ensurePlayerWorldLoaded();
         DatabaseManager db = new DatabaseManager(this);
         this.storage = new SqliteParkourStorage(this, db);
         try { this.storage.cleanupInvalidNumericColumns(); } catch (Throwable ignored) {}
-        this.parkourManager = new ParkourManager(storage.loadCourses());
+        this.parkourManager = new ParkourManager(Collections.emptyList());
         this.cacheManager = new ParkourCacheManager(this, storage);
         this.messageManager = new MessageManager(this);
         this.guiConfig = new GuiConfig(this);
@@ -85,8 +91,7 @@ public class ParkourPlugin extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager, messageManager, null), this);
         }
 
-        Bukkit.getScheduler().runTaskLater(this, () -> hologramManager.spawnConfiguredHolograms(), 20L);
-        getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
+        Bukkit.getScheduler().runTaskLater(this, () -> loadCoursesWithRetry(1), 20L);
     }
 
     @Override
@@ -137,4 +142,51 @@ public class ParkourPlugin extends JavaPlugin {
     public GuiConfig getGuiConfig() { return guiConfig; }
 
     public ParkourCacheManager getCacheManager() { return cacheManager; }
+
+    private void ensurePlayerWorldLoaded() {
+        String worldName = configManager.getPlayerWorldName();
+        if (worldName == null || worldName.isBlank()) {
+            getLogger().warning("Player parkour world name is not configured; skipping auto-load.");
+            return;
+        }
+        if (Bukkit.getWorld(worldName) != null) {
+            return;
+        }
+        WorldCreator creator = new WorldCreator(worldName);
+        if (configManager.isVoidWorld()) {
+            creator.generator(new PlayerParkourManager.VoidChunkGenerator());
+            creator.type(WorldType.FLAT);
+        }
+        if (Bukkit.createWorld(creator) != null) {
+            getLogger().info("Ensured player parkour world '" + worldName + "' is loaded.");
+        } else {
+            getLogger().warning("Failed to load or create player parkour world '" + worldName + "'.");
+        }
+    }
+
+    private void loadCoursesWithRetry(int attempt) {
+        SqliteParkourStorage.LoadResult result = storage.loadCourses();
+        parkourManager.replaceCourses(result.courses());
+        if (playerParkourManager != null) {
+            playerParkourManager.refreshPlotUsage(result.courses());
+        }
+        getLogger().info("Loaded " + result.courses().size() + " parkour course(s) (attempt " + attempt + ").");
+        hologramManager.spawnConfiguredHolograms();
+        if (attempt == 1) {
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                for (ParkourCourse course : parkourManager.getCourses().values()) {
+                    hologramManager.createHolograms(course);
+                }
+            }, 40L);
+        }
+        if (!result.missingWorlds().isEmpty()) {
+            String missing = String.join(", ", result.missingWorlds());
+            if (attempt < 5) {
+                getLogger().warning("Waiting for worlds to load before registering remaining parkours: " + missing);
+                Bukkit.getScheduler().runTaskLater(this, () -> loadCoursesWithRetry(attempt + 1), 40L * attempt);
+            } else {
+                getLogger().severe("Some parkour worlds never loaded: " + missing);
+            }
+        }
+    }
 }

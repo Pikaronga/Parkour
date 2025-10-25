@@ -13,11 +13,14 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.UUID;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 public class HologramManager implements Listener {
 
@@ -92,21 +95,37 @@ public class HologramManager implements Listener {
             boolean respawn = forceRespawn || top == null || !isSameLocation(top.getBaseLocation(), location);
             if (respawn) {
                 if (top != null) {
+                    log(Level.INFO, String.format(
+                            "Despawning stale top hologram for course %s at %s with stands %s.",
+                            course.getName(),
+                            formatLocation(top.getBaseLocation()),
+                            formatEntityIds(top.getEntityIds())));
                     top.despawn();
-                    log(Level.INFO, "Despawning stale top hologram for course " + course.getName() + ".");
                 }
                 Hologram hologram = new Hologram(location, hologramKey, identifierFor(course.getName(), "top"));
                 hologram.spawn(lines);
                 topHolograms.put(key, hologram);
-                log(Level.INFO, "Spawned top hologram for course " + course.getName() + ".");
+                log(Level.INFO, String.format(
+                        "Spawned top hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(location),
+                        formatEntityIds(hologram.getEntityIds())));
             } else {
                 top.update(lines);
-                log(Level.FINE, "Updated top hologram for course " + course.getName() + ".");
+                log(Level.FINE, String.format(
+                        "Updated top hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(top.getBaseLocation()),
+                        formatEntityIds(top.getEntityIds())));
             }
         } else if (top != null) {
+            log(Level.INFO, String.format(
+                    "Removed top hologram for course %s at %s with stands %s.",
+                    course.getName(),
+                    formatLocation(top.getBaseLocation()),
+                    formatEntityIds(top.getEntityIds())));
             top.despawn();
             topHolograms.remove(key);
-            log(Level.INFO, "Removed top hologram for course " + course.getName() + ".");
         }
     }
 
@@ -117,20 +136,36 @@ public class HologramManager implements Listener {
             boolean respawn = forceRespawn || best == null || !isSameLocation(best.getBaseLocation(), location);
             if (respawn) {
                 if (best != null) {
+                    log(Level.INFO, String.format(
+                            "Despawning stale personal best hologram for course %s at %s with stands %s.",
+                            course.getName(),
+                            formatLocation(best.getBaseLocation()),
+                            formatEntityIds(best.getTrackedEntityIds())));
                     best.destroy();
-                    log(Level.INFO, "Despawning stale personal best hologram for course " + course.getName() + ".");
                 }
                 PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location, textProvider, hologramKey);
                 bestHolograms.put(key, hologram);
-                log(Level.INFO, "Spawned personal best hologram for course " + course.getName() + ".");
+                log(Level.INFO, String.format(
+                        "Spawned personal best hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(location),
+                        formatEntityIds(hologram.getTrackedEntityIds())));
             } else {
                 Bukkit.getOnlinePlayers().forEach(best::updateFor);
-                log(Level.FINE, "Updated personal best hologram for course " + course.getName() + ".");
+                log(Level.FINE, String.format(
+                        "Updated personal best hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(best.getBaseLocation()),
+                        formatEntityIds(best.getTrackedEntityIds())));
             }
         } else if (best != null) {
+            log(Level.INFO, String.format(
+                    "Removed personal best hologram for course %s at %s with stands %s.",
+                    course.getName(),
+                    formatLocation(best.getBaseLocation()),
+                    formatEntityIds(best.getTrackedEntityIds())));
             best.destroy();
             bestHolograms.remove(key);
-            log(Level.INFO, "Removed personal best hologram for course " + course.getName() + ".");
         }
     }
 
@@ -142,20 +177,36 @@ public class HologramManager implements Listener {
             boolean respawn = forceRespawn || creator == null || !isSameLocation(existing, location);
             if (respawn) {
                 if (creator != null) {
+                    log(Level.INFO, String.format(
+                            "Despawning stale creator hologram for course %s at %s with stands %s.",
+                            course.getName(),
+                            formatLocation(existing),
+                            formatEntityIds(creator.getEntityIds())));
                     creator.destroy();
-                    log(Level.INFO, "Despawning stale creator hologram for course " + course.getName() + ".");
                 }
                 CreatorHologram hologram = new CreatorHologram(course, location, textProvider, hologramKey);
                 creatorHolograms.put(key, hologram);
-                log(Level.INFO, "Spawned creator hologram for course " + course.getName() + ".");
+                log(Level.INFO, String.format(
+                        "Spawned creator hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(location),
+                        formatEntityIds(hologram.getEntityIds())));
             } else {
                 creator.update();
-                log(Level.FINE, "Updated creator hologram for course " + course.getName() + ".");
+                log(Level.FINE, String.format(
+                        "Updated creator hologram for course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(creator.getBaseLocation()),
+                        formatEntityIds(creator.getEntityIds())));
             }
         } else if (creator != null) {
+            log(Level.INFO, String.format(
+                    "Removed creator hologram for course %s at %s with stands %s.",
+                    course.getName(),
+                    formatLocation(creator.getBaseLocation()),
+                    formatEntityIds(creator.getEntityIds())));
             creator.destroy();
             creatorHolograms.remove(key);
-            log(Level.INFO, "Removed creator hologram for course " + course.getName() + ".");
         }
     }
 
@@ -199,18 +250,30 @@ public class HologramManager implements Listener {
             String key = course.getName().toLowerCase(Locale.ROOT);
             Hologram top = topHolograms.remove(key);
             if (top != null) {
+                log(Level.INFO, String.format(
+                        "Removed top hologram for removed course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(top.getBaseLocation()),
+                        formatEntityIds(top.getEntityIds())));
                 top.despawn();
-                log(Level.INFO, "Removed top hologram for removed course " + course.getName() + ".");
             }
             PersonalBestHologram best = bestHolograms.remove(key);
             if (best != null) {
+                log(Level.INFO, String.format(
+                        "Removed personal best hologram for removed course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(best.getBaseLocation()),
+                        formatEntityIds(best.getTrackedEntityIds())));
                 best.destroy();
-                log(Level.INFO, "Removed personal best hologram for removed course " + course.getName() + ".");
             }
             CreatorHologram creator = creatorHolograms.remove(key);
             if (creator != null) {
+                log(Level.INFO, String.format(
+                        "Removed creator hologram for removed course %s at %s with stands %s.",
+                        course.getName(),
+                        formatLocation(creator.getBaseLocation()),
+                        formatEntityIds(creator.getEntityIds())));
                 creator.destroy();
-                log(Level.INFO, "Removed creator hologram for removed course " + course.getName() + ".");
             }
         });
     }
@@ -246,6 +309,21 @@ public class HologramManager implements Listener {
             return false;
         }
         return a.distanceSquared(b) < 0.0001D;
+    }
+
+    private String formatLocation(Location location) {
+        if (location == null) {
+            return "unknown";
+        }
+        String worldName = location.getWorld() != null ? location.getWorld().getName() : "null";
+        return String.format("%s:(%.2f, %.2f, %.2f)", worldName, location.getX(), location.getY(), location.getZ());
+    }
+
+    private String formatEntityIds(Collection<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return "[]";
+        }
+        return ids.stream().map(UUID::toString).collect(Collectors.joining(", ", "[", "]"));
     }
 
     private String identifierFor(String courseName, String type) {

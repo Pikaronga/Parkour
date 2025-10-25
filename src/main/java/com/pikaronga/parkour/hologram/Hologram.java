@@ -11,6 +11,8 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class Hologram {
 
@@ -93,6 +95,12 @@ public class Hologram {
 
     public Location getBaseLocation() {
         return baseLocation;
+    }
+
+    public List<UUID> getEntityIds() {
+        return armorStands.stream()
+                .map(ArmorStand::getUniqueId)
+                .collect(Collectors.toUnmodifiableList());
     }
 
     private ArmorStand spawnLine(World world, Location location, String line) {

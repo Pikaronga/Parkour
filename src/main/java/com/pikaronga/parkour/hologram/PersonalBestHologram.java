@@ -15,7 +15,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -144,6 +147,19 @@ public class PersonalBestHologram {
 
     public Location getBaseLocation() {
         return baseLocation;
+    }
+
+    public List<UUID> getTrackedEntityIds() {
+        LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+        if (headerStand != null) {
+            ids.add(headerStand.getUniqueId());
+        }
+        for (ArmorStand stand : personalLines.values()) {
+            if (stand != null) {
+                ids.add(stand.getUniqueId());
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     private void applyIdentifier(ArmorStand stand, String identifier) {

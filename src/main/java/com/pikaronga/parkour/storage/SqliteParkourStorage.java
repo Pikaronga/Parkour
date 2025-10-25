@@ -6,6 +6,7 @@ import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.LocationUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 
 import java.sql.*;
 import java.util.*;
@@ -19,25 +20,39 @@ public class SqliteParkourStorage {
         this.db = db;
     }
 
-    public List<ParkourCourse> loadCourses() {
+    public record LoadResult(List<ParkourCourse> courses, List<String> missingWorlds) {}
+
+    public LoadResult loadCourses() {
         List<ParkourCourse> list = new ArrayList<>();
+        java.util.Set<String> missingWorlds = new java.util.LinkedHashSet<>();
         String sql = "SELECT * FROM parkours";
         try (Connection conn = db.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String name = rs.getString("name");
                     String world = rs.getString("world");
+                    if (world == null || world.isBlank()) {
+                        plugin.getLogger().warning("Skipping parkour '" + name + "': no world recorded in storage.");
+                        missingWorlds.add("<unknown>");
+                        continue;
+                    }
+                    World loadedWorld = Bukkit.getWorld(world);
+                    if (loadedWorld == null) {
+                        plugin.getLogger().warning("Skipping parkour '" + name + "': world '" + world + "' not loaded yet.");
+                        missingWorlds.add(world);
+                        continue;
+                    }
                     try {
                         ParkourCourse c = new ParkourCourse(name);
                         java.sql.ResultSetMetaData md = rs.getMetaData();
                         java.util.HashSet<String> cols = new java.util.HashSet<>();
                         for (int ci = 1; ci <= md.getColumnCount(); ci++) cols.add(md.getColumnName(ci).toLowerCase());
                         // Start/finish teleports (guard invalid types)
-                        c.setStartTeleport(readLocation(world, rs, "start_"));
-                        c.setFinishTeleport(readLocation(world, rs, "finish_"));
+                        c.setStartTeleport(readLocation(loadedWorld, rs, "start_"));
+                        c.setFinishTeleport(readLocation(loadedWorld, rs, "finish_"));
                         // Plates
-                        c.setStartPlate(readBlockLocation(world, rs, "start_plate_"));
-                        c.setFinishPlate(readBlockLocation(world, rs, "finish_plate_"));
+                        c.setStartPlate(readBlockLocation(loadedWorld, rs, "start_plate_"));
+                        c.setFinishPlate(readBlockLocation(loadedWorld, rs, "finish_plate_"));
                         // Published and difficulty
                         Integer diffObj = getNullableInteger(rs, "difficulty");
                         if (diffObj != null) c.setStaffDifficulty(diffObj);
@@ -57,26 +72,27 @@ public class SqliteParkourStorage {
                             Double x = getNullableDouble(rs, "top_holo_x");
                             Double y = getNullableDouble(rs, "top_holo_y");
                             Double z = getNullableDouble(rs, "top_holo_z");
-                            if (x != null && y != null && z != null) c.setTopHologramLocation(new Location(Bukkit.getWorld(world), x, y, z));
+                            if (x != null && y != null && z != null) c.setTopHologramLocation(new Location(loadedWorld, x, y, z));
                         }
                         if (cols.contains("best_holo_x")) {
                             Double x = getNullableDouble(rs, "best_holo_x");
                             Double y = getNullableDouble(rs, "best_holo_y");
                             Double z = getNullableDouble(rs, "best_holo_z");
-                            if (x != null && y != null && z != null) c.setBestHologramLocation(new Location(Bukkit.getWorld(world), x, y, z));
+                            if (x != null && y != null && z != null) c.setBestHologramLocation(new Location(loadedWorld, x, y, z));
                         }
                         if (cols.contains("creator_holo_x")) {
                             Double x = getNullableDouble(rs, "creator_holo_x");
                             Double y = getNullableDouble(rs, "creator_holo_y");
                             Double z = getNullableDouble(rs, "creator_holo_z");
-                            if (x != null && y != null && z != null) c.setCreatorHologramLocation(new Location(Bukkit.getWorld(world), x, y, z));
+                            if (x != null && y != null && z != null) c.setCreatorHologramLocation(new Location(loadedWorld, x, y, z));
                         }
                         // Creators
                         loadCreators(conn, rs.getInt("id"), c);
                         // Checkpoints
-                        loadCheckpoints(conn, rs.getInt("id"), world, c);
+                        loadCheckpoints(conn, rs.getInt("id"), loadedWorld, c);
                         // Times (best per player)
                         loadTimes(conn, rs.getInt("id"), c);
+                        plugin.getLogger().info("Loaded parkour '" + name + "' in world '" + loadedWorld.getName() + "'.");
                         list.add(c);
                     } catch (Exception rowEx) {
                         plugin.getLogger().warning("Skipping parkour '" + name + "' due to invalid data: " + rowEx.getMessage());
@@ -86,7 +102,7 @@ public class SqliteParkourStorage {
         } catch (SQLException e) {
             plugin.getLogger().severe("Failed to load parkours from DB: " + e.getMessage());
         }
-        return list;
+        return new LoadResult(list, new java.util.ArrayList<>(missingWorlds));
     }
 
     private void loadCreators(Connection conn, int parkourId, ParkourCourse c) throws SQLException {
@@ -102,7 +118,10 @@ public class SqliteParkourStorage {
         }
     }
 
-    private void loadCheckpoints(Connection conn, int parkourId, String world, ParkourCourse c) throws SQLException {
+    private void loadCheckpoints(Connection conn, int parkourId, World world, ParkourCourse c) throws SQLException {
+        if (world == null) {
+            return;
+        }
         try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM checkpoints WHERE parkour_id=? ORDER BY ord ASC")) {
             ps.setInt(1, parkourId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -120,8 +139,8 @@ public class SqliteParkourStorage {
                     }
                     float yaw = ryaw == null ? 0f : ryaw.floatValue();
                     float pitch = rpitch == null ? 0f : rpitch.floatValue();
-                    Location plate = new Location(Bukkit.getWorld(world), px, py, pz);
-                    Location resp = new Location(Bukkit.getWorld(world), rx, ry, rz, yaw, pitch);
+                    Location plate = new Location(world, px, py, pz);
+                    Location resp = new Location(world, rx, ry, rz, yaw, pitch);
                     c.addCheckpoint(new Checkpoint(plate, resp));
                 }
             }
@@ -145,24 +164,24 @@ public class SqliteParkourStorage {
         }
     }
 
-    private Location readLocation(String world, ResultSet rs, String prefix) throws SQLException {
+    private Location readLocation(World world, ResultSet rs, String prefix) throws SQLException {
         Double x = getNullableDouble(rs, prefix + "x");
         Double y = getNullableDouble(rs, prefix + "y");
         Double z = getNullableDouble(rs, prefix + "z");
         Double yawD = getNullableDouble(rs, prefix + "yaw");
         Double pitchD = getNullableDouble(rs, prefix + "pitch");
-        if (x == null || y == null || z == null) return null;
+        if (x == null || y == null || z == null || world == null) return null;
         float yaw = yawD == null ? 0f : yawD.floatValue();
         float pitch = pitchD == null ? 0f : pitchD.floatValue();
-        return new Location(Bukkit.getWorld(world), x, y, z, yaw, pitch);
+        return new Location(world, x, y, z, yaw, pitch);
     }
 
-    private Location readBlockLocation(String world, ResultSet rs, String prefix) throws SQLException {
+    private Location readBlockLocation(World world, ResultSet rs, String prefix) throws SQLException {
         Double x = getNullableDouble(rs, prefix + "x");
         Double y = getNullableDouble(rs, prefix + "y");
         Double z = getNullableDouble(rs, prefix + "z");
-        if (x == null || y == null || z == null) return null;
-        return new Location(Bukkit.getWorld(world), x, y, z);
+        if (x == null || y == null || z == null || world == null) return null;
+        return new Location(world, x, y, z);
     }
 
     private Double getNullableDouble(ResultSet rs, String column) throws SQLException {
