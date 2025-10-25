@@ -17,6 +17,9 @@ import com.pikaronga.parkour.player.PlayerParkourManager;
 import com.pikaronga.parkour.player.BuildProtectionListener;
 import com.pikaronga.parkour.player.PlotWorldListener;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class ParkourPlugin extends JavaPlugin {
@@ -31,6 +34,7 @@ public class ParkourPlugin extends JavaPlugin {
     private GuiConfig guiConfig;
     private PlayerParkourManager playerParkourManager;
     private ParkourCacheManager cacheManager;
+    private NamespacedKey hologramKey;
 
     @Override
     public void onEnable() {
@@ -44,13 +48,18 @@ public class ParkourPlugin extends JavaPlugin {
         this.guiConfig = new GuiConfig(this);
         this.hologramTextProvider = new HologramTextProvider(this);
         this.sessionManager = new SessionManager(this, messageManager);
-        this.hologramManager = new HologramManager(this, parkourManager, hologramTextProvider);
+        this.hologramKey = new NamespacedKey(this, "parkour_holo_id");
+        this.hologramManager = new HologramManager(this, parkourManager, hologramTextProvider, hologramKey);
 
         // Safety sweep: purge stray hologram armor stands with tag
         try {
-            org.bukkit.Bukkit.getWorlds().forEach(w -> w.getEntitiesByClass(org.bukkit.entity.ArmorStand.class).forEach(as -> {
+            Bukkit.getWorlds().forEach(w -> w.getEntitiesByClass(ArmorStand.class).forEach(as -> {
                 try {
-                    if (as.getScoreboardTags().contains("parkour_holo")) as.remove();
+                    boolean legacyTag = as.getScoreboardTags().contains("parkour_holo");
+                    boolean keyed = hologramKey != null && as.getPersistentDataContainer().has(hologramKey, PersistentDataType.STRING);
+                    if (legacyTag || keyed) {
+                        as.remove();
+                    }
                 } catch (Throwable ignored) {}
             }));
         } catch (Throwable ignored) {}
@@ -76,7 +85,7 @@ public class ParkourPlugin extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(new ParkourListener(parkourManager, sessionManager, messageManager, null), this);
         }
 
-        hologramManager.spawnConfiguredHolograms();
+        Bukkit.getScheduler().runTaskLater(this, () -> hologramManager.spawnConfiguredHolograms(), 20L);
         getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
     }
 

@@ -10,14 +10,19 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.NamespacedKey;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 public class PersonalBestHologram {
+
+    private static final String HOLOGRAM_TAG = "parkour_holo";
 
     private final ParkourPlugin plugin;
     private final ParkourCourse course;
@@ -25,12 +30,16 @@ public class PersonalBestHologram {
     private ArmorStand headerStand;
     private final Map<UUID, ArmorStand> personalLines = new HashMap<>();
     private final HologramTextProvider textProvider;
+    private final NamespacedKey hologramKey;
+    private final String headerIdentifier;
 
-    public PersonalBestHologram(ParkourPlugin plugin, ParkourCourse course, Location baseLocation, HologramTextProvider textProvider) {
+    public PersonalBestHologram(ParkourPlugin plugin, ParkourCourse course, Location baseLocation, HologramTextProvider textProvider, NamespacedKey hologramKey) {
         this.plugin = plugin;
         this.course = course;
         this.baseLocation = baseLocation.clone();
         this.textProvider = textProvider;
+        this.hologramKey = hologramKey;
+        this.headerIdentifier = identifierForHeader();
         spawnHeader();
         Bukkit.getOnlinePlayers().forEach(this::prepareForPlayer);
     }
@@ -42,7 +51,7 @@ public class PersonalBestHologram {
         }
         try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
         headerStand = (ArmorStand) world.spawnEntity(baseLocation, EntityType.ARMOR_STAND);
-        configureStand(headerStand, textProvider.formatBestHeader(course.getName()));
+        configureStand(headerStand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
     }
 
     private ArmorStand spawnPersonalLine() {
@@ -52,12 +61,12 @@ public class PersonalBestHologram {
         }
         try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
         ArmorStand stand = (ArmorStand) world.spawnEntity(baseLocation.clone().add(0, -0.3, 0), EntityType.ARMOR_STAND);
-        configureStand(stand, textProvider.formatBestEmpty(course.getName()));
+        configureStand(stand, textProvider.formatBestEmpty(course.getName()), "");
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
         return stand;
     }
 
-    private void configureStand(ArmorStand stand, String name) {
+    private void configureStand(ArmorStand stand, String name, String identifier) {
         stand.setGravity(false);
         stand.setMarker(true);
         stand.setInvisible(true);
@@ -73,7 +82,7 @@ public class PersonalBestHologram {
         stand.setPersistent(true);
         stand.setInvulnerable(true);
         stand.setSilent(true);
-        try { stand.addScoreboardTag("parkour_holo"); } catch (Throwable ignored) {}
+        applyIdentifier(stand, identifier);
     }
 
     public void prepareForPlayer(Player player) {
@@ -91,6 +100,7 @@ public class PersonalBestHologram {
         if (stand == null) {
             return;
         }
+        applyIdentifier(stand, identifierForPlayer(player.getUniqueId()));
         long best = course.getBestTime(player.getUniqueId());
         if (best <= 0) {
             try {
@@ -134,6 +144,21 @@ public class PersonalBestHologram {
 
     public Location getBaseLocation() {
         return baseLocation;
+    }
+
+    private void applyIdentifier(ArmorStand stand, String identifier) {
+        try { stand.addScoreboardTag(HOLOGRAM_TAG); } catch (Throwable ignored) {}
+        if (hologramKey != null && identifier != null && !identifier.isEmpty()) {
+            try { stand.getPersistentDataContainer().set(hologramKey, PersistentDataType.STRING, identifier); } catch (Throwable ignored) {}
+        }
+    }
+
+    private String identifierForHeader() {
+        return "best:" + course.getName().toLowerCase(Locale.ROOT) + ":header";
+    }
+
+    private String identifierForPlayer(UUID uuid) {
+        return "best:" + course.getName().toLowerCase(Locale.ROOT) + ":" + uuid;
     }
 }
 

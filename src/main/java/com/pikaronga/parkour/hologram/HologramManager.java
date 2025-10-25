@@ -5,6 +5,7 @@ import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -13,135 +14,245 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.logging.Level;
 
 public class HologramManager implements Listener {
 
     private final ParkourPlugin plugin;
     private final com.pikaronga.parkour.util.ParkourManager parkourManager;
     private final HologramTextProvider textProvider;
+    private final NamespacedKey hologramKey;
     private final Map<String, Hologram> topHolograms = new HashMap<>();
     private final Map<String, PersonalBestHologram> bestHolograms = new HashMap<>();
     private final Map<String, CreatorHologram> creatorHolograms = new HashMap<>();
     private BukkitTask task;
 
-    public HologramManager(ParkourPlugin plugin, com.pikaronga.parkour.util.ParkourManager parkourManager, HologramTextProvider textProvider) {
+    public HologramManager(ParkourPlugin plugin,
+                           com.pikaronga.parkour.util.ParkourManager parkourManager,
+                           HologramTextProvider textProvider,
+                           NamespacedKey hologramKey) {
         this.plugin = plugin;
         this.parkourManager = parkourManager;
         this.textProvider = textProvider;
+        this.hologramKey = hologramKey;
     }
 
     public void spawnConfiguredHolograms() {
+        plugin.getLogger().info("Spawning configured holograms for loaded courses.");
         for (ParkourCourse course : parkourManager.getCourses().values()) {
-            if (course.getTopHologramLocation() != null) {
-                Hologram hologram = new Hologram(course.getTopHologramLocation());
-                int limit = (course.getCreators().isEmpty() ? 10 : plugin.getConfigManager().getTopHologramSize());
-                hologram.spawn(course.createTopLinesWithLimit(textProvider, limit));
-                topHolograms.put(course.getName().toLowerCase(), hologram);
-            }
-            if (course.getBestHologramLocation() != null) {
-                PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, course.getBestHologramLocation(), textProvider);
-                bestHolograms.put(course.getName().toLowerCase(), hologram);
-            }
-            if (course.getCreatorHologramLocation() != null) {
-                CreatorHologram ch = new CreatorHologram(course, course.getCreatorHologramLocation(), textProvider);
-                creatorHolograms.put(course.getName().toLowerCase(), ch);
-            }
+            createHolograms(course);
         }
         startUpdater();
     }
 
+    public void createHolograms(ParkourCourse course) {
+        refreshCourseHolograms(course, true);
+    }
+
     public void updateHolograms(ParkourCourse course) {
-        Hologram top = topHolograms.get(course.getName().toLowerCase());
-        if (top != null) {
-            int limit = (course.getCreators().isEmpty() ? 10 : plugin.getConfigManager().getTopHologramSize());
-            top.update(course.createTopLinesWithLimit(textProvider, limit));
-        }
-        PersonalBestHologram best = bestHolograms.get(course.getName().toLowerCase());
-        if (best != null) {
-            Bukkit.getOnlinePlayers().forEach(best::updateFor);
-        }
-        CreatorHologram ch = creatorHolograms.get(course.getName().toLowerCase());
-        if (ch != null) {
-            ch.update();
-        }
+        refreshCourseHolograms(course, false);
     }
 
     public void setTopHologram(ParkourCourse course, Location location) {
-        Hologram hologram = new Hologram(location);
-        int limit = (course.getCreators().isEmpty() ? 10 : plugin.getConfigManager().getTopHologramSize());
-        hologram.spawn(course.createTopLinesWithLimit(textProvider, limit));
-        Hologram existing = topHolograms.put(course.getName().toLowerCase(), hologram);
-        if (existing != null) {
-            existing.despawn();
-        }
-        course.setTopHologramLocation(location);
+        course.setTopHologramLocation(location != null ? location.clone() : null);
+        log(Level.INFO, "Configured top hologram location for course " + course.getName() + ".");
+        createHolograms(course);
     }
 
     public void setBestHologram(ParkourCourse course, Location location) {
-        PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location, textProvider);
-        PersonalBestHologram existing = bestHolograms.put(course.getName().toLowerCase(), hologram);
-        if (existing != null) {
-            existing.destroy();
-        }
-        course.setBestHologramLocation(location);
+        course.setBestHologramLocation(location != null ? location.clone() : null);
+        log(Level.INFO, "Configured personal best hologram location for course " + course.getName() + ".");
+        createHolograms(course);
     }
 
     public void setCreatorHologram(ParkourCourse course, Location location) {
-        CreatorHologram hologram = new CreatorHologram(course, location, textProvider);
-        CreatorHologram existing = creatorHolograms.put(course.getName().toLowerCase(), hologram);
-        if (existing != null) {
-            existing.destroy();
+        course.setCreatorHologramLocation(location != null ? location.clone() : null);
+        log(Level.INFO, "Configured creator hologram location for course " + course.getName() + ".");
+        createHolograms(course);
+    }
+
+    private void refreshCourseHolograms(ParkourCourse course, boolean forceRespawn) {
+        runSync(() -> {
+            String key = course.getName().toLowerCase(Locale.ROOT);
+            handleTopHologram(course, key, forceRespawn);
+            handleBestHologram(course, key, forceRespawn);
+            handleCreatorHologram(course, key, forceRespawn);
+        });
+    }
+
+    private void handleTopHologram(ParkourCourse course, String key, boolean forceRespawn) {
+        Location location = course.getTopHologramLocation();
+        Hologram top = topHolograms.get(key);
+        if (location != null) {
+            int limit = course.getCreators().isEmpty() ? 10 : plugin.getConfigManager().getTopHologramSize();
+            java.util.List<String> lines = course.createTopLinesWithLimit(textProvider, limit);
+            boolean respawn = forceRespawn || top == null || !isSameLocation(top.getBaseLocation(), location);
+            if (respawn) {
+                if (top != null) {
+                    top.despawn();
+                    log(Level.INFO, "Despawning stale top hologram for course " + course.getName() + ".");
+                }
+                Hologram hologram = new Hologram(location, hologramKey, identifierFor(course.getName(), "top"));
+                hologram.spawn(lines);
+                topHolograms.put(key, hologram);
+                log(Level.INFO, "Spawned top hologram for course " + course.getName() + ".");
+            } else {
+                top.update(lines);
+                log(Level.FINE, "Updated top hologram for course " + course.getName() + ".");
+            }
+        } else if (top != null) {
+            top.despawn();
+            topHolograms.remove(key);
+            log(Level.INFO, "Removed top hologram for course " + course.getName() + ".");
         }
-        course.setCreatorHologramLocation(location);
+    }
+
+    private void handleBestHologram(ParkourCourse course, String key, boolean forceRespawn) {
+        Location location = course.getBestHologramLocation();
+        PersonalBestHologram best = bestHolograms.get(key);
+        if (location != null) {
+            boolean respawn = forceRespawn || best == null || !isSameLocation(best.getBaseLocation(), location);
+            if (respawn) {
+                if (best != null) {
+                    best.destroy();
+                    log(Level.INFO, "Despawning stale personal best hologram for course " + course.getName() + ".");
+                }
+                PersonalBestHologram hologram = new PersonalBestHologram(plugin, course, location, textProvider, hologramKey);
+                bestHolograms.put(key, hologram);
+                log(Level.INFO, "Spawned personal best hologram for course " + course.getName() + ".");
+            } else {
+                Bukkit.getOnlinePlayers().forEach(best::updateFor);
+                log(Level.FINE, "Updated personal best hologram for course " + course.getName() + ".");
+            }
+        } else if (best != null) {
+            best.destroy();
+            bestHolograms.remove(key);
+            log(Level.INFO, "Removed personal best hologram for course " + course.getName() + ".");
+        }
+    }
+
+    private void handleCreatorHologram(ParkourCourse course, String key, boolean forceRespawn) {
+        Location location = course.getCreatorHologramLocation();
+        CreatorHologram creator = creatorHolograms.get(key);
+        if (location != null) {
+            Location existing = creator != null ? creator.getBaseLocation() : null;
+            boolean respawn = forceRespawn || creator == null || !isSameLocation(existing, location);
+            if (respawn) {
+                if (creator != null) {
+                    creator.destroy();
+                    log(Level.INFO, "Despawning stale creator hologram for course " + course.getName() + ".");
+                }
+                CreatorHologram hologram = new CreatorHologram(course, location, textProvider, hologramKey);
+                creatorHolograms.put(key, hologram);
+                log(Level.INFO, "Spawned creator hologram for course " + course.getName() + ".");
+            } else {
+                creator.update();
+                log(Level.FINE, "Updated creator hologram for course " + course.getName() + ".");
+            }
+        } else if (creator != null) {
+            creator.destroy();
+            creatorHolograms.remove(key);
+            log(Level.INFO, "Removed creator hologram for course " + course.getName() + ".");
+        }
     }
 
     private void startUpdater() {
-        if (task != null) {
-            task.cancel();
-        }
-        task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Map.Entry<String, PersonalBestHologram> entry : bestHolograms.entrySet()) {
-                ParkourCourse course = parkourManager.getCourse(entry.getKey());
-                if (course == null) {
-                    continue;
-                }
-                PersonalBestHologram hologram = entry.getValue();
-                Bukkit.getOnlinePlayers().forEach(hologram::updateFor);
+        runSync(() -> {
+            if (task != null) {
+                task.cancel();
             }
-        }, 20L, 40L);
+            task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+                for (Entry<String, PersonalBestHologram> entry : bestHolograms.entrySet()) {
+                    ParkourCourse course = parkourManager.getCourse(entry.getKey());
+                    if (course == null) {
+                        continue;
+                    }
+                    PersonalBestHologram hologram = entry.getValue();
+                    Bukkit.getOnlinePlayers().forEach(hologram::updateFor);
+                }
+            }, 20L, 40L);
+            log(Level.FINE, "Started personal best hologram updater task.");
+        });
     }
 
     public void despawnAll() {
-        if (task != null) {
-            task.cancel();
-        }
-        topHolograms.values().forEach(Hologram::despawn);
-        bestHolograms.values().forEach(PersonalBestHologram::destroy);
-        creatorHolograms.values().forEach(CreatorHologram::destroy);
-        topHolograms.clear();
-        bestHolograms.clear();
-        creatorHolograms.clear();
+        runSync(() -> {
+            if (task != null) {
+                task.cancel();
+                task = null;
+            }
+            topHolograms.values().forEach(Hologram::despawn);
+            bestHolograms.values().forEach(PersonalBestHologram::destroy);
+            creatorHolograms.values().forEach(CreatorHologram::destroy);
+            topHolograms.clear();
+            bestHolograms.clear();
+            creatorHolograms.clear();
+            log(Level.INFO, "Despawned all holograms.");
+        });
     }
 
     public void removeCourseHolograms(ParkourCourse course) {
-        Hologram top = topHolograms.remove(course.getName().toLowerCase());
-        if (top != null) top.despawn();
-        PersonalBestHologram best = bestHolograms.remove(course.getName().toLowerCase());
-        if (best != null) best.destroy();
-        CreatorHologram ch = creatorHolograms.remove(course.getName().toLowerCase());
-        if (ch != null) ch.destroy();
+        runSync(() -> {
+            String key = course.getName().toLowerCase(Locale.ROOT);
+            Hologram top = topHolograms.remove(key);
+            if (top != null) {
+                top.despawn();
+                log(Level.INFO, "Removed top hologram for removed course " + course.getName() + ".");
+            }
+            PersonalBestHologram best = bestHolograms.remove(key);
+            if (best != null) {
+                best.destroy();
+                log(Level.INFO, "Removed personal best hologram for removed course " + course.getName() + ".");
+            }
+            CreatorHologram creator = creatorHolograms.remove(key);
+            if (creator != null) {
+                creator.destroy();
+                log(Level.INFO, "Removed creator hologram for removed course " + course.getName() + ".");
+            }
+        });
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        bestHolograms.values().forEach(hologram -> hologram.prepareForPlayer(player));
+        runSync(() -> bestHolograms.values().forEach(hologram -> hologram.prepareForPlayer(player)));
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         bestHolograms.values().forEach(hologram -> hologram.removePlayer(player.getUniqueId()));
+    }
+
+    private void runSync(Runnable runnable) {
+        if (Bukkit.isPrimaryThread()) {
+            runnable.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, runnable);
+        }
+    }
+
+    private boolean isSameLocation(Location a, Location b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getWorld() == null || b.getWorld() == null) {
+            return false;
+        }
+        if (!a.getWorld().getUID().equals(b.getWorld().getUID())) {
+            return false;
+        }
+        return a.distanceSquared(b) < 0.0001D;
+    }
+
+    private String identifierFor(String courseName, String type) {
+        return type + ":" + courseName.toLowerCase(Locale.ROOT);
+    }
+
+    private void log(Level level, String message) {
+        plugin.getLogger().log(level, message);
     }
 }
