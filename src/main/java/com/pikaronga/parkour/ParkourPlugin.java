@@ -74,6 +74,15 @@ public class ParkourPlugin extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(hologramManager, this);
         Bukkit.getPluginManager().registerEvents(new GUIListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new com.pikaronga.parkour.gui.GuiProtectionListener(), this);
+        Bukkit.getPluginManager().registerEvents(new com.pikaronga.parkour.gui.SetupInputListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new com.pikaronga.parkour.gui.RatingGUIListener(this), this);
+        // Disable collisions globally via team
+        if (configManager.disableCollisions()) {
+            com.pikaronga.parkour.player.CollisionManager collisionManager = new com.pikaronga.parkour.player.CollisionManager();
+            Bukkit.getPluginManager().registerEvents(collisionManager, this);
+            collisionManager.applyToOnlinePlayers();
+        }
 
         if (configManager.playerParkoursEnabled()) {
             this.playerParkourManager = new PlayerParkourManager(this, configManager, parkourManager);
@@ -99,7 +108,20 @@ public class ParkourPlugin extends JavaPlugin {
             // (player world creation may schedule its own chunk loads at 40L)
             Bukkit.getScheduler().runTaskLater(this, () -> hologramManager.spawnConfiguredHolograms(), 80L);
             getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
+            // Log counts from SQLite
+            Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                long times = 0L, stats = 0L, runCounters = 0L;
+                try (java.sql.Connection conn = new DatabaseManager(this).getConnection();
+                     java.sql.Statement st = conn.createStatement()) {
+                    try (java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM times")) { if (rs.next()) times = rs.getLong(1); }
+                    try (java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM parkour_stats")) { if (rs.next()) stats = rs.getLong(1); }
+                    try (java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM parkour_runs")) { if (rs.next()) runCounters = rs.getLong(1); }
+                } catch (Exception ignored) {}
+                getLogger().info("[Parkour] Loaded " + times + " times, " + runCounters + " run counters, and " + stats + " player stats from SQLite.");
+            });
         }, 20L);
+
+        try { storage.startStatsTasks(); } catch (Throwable ignored) {}
 
         // Register PlaceholderAPI placeholders (if PlaceholderAPI is present)
         try {
@@ -120,8 +142,17 @@ public class ParkourPlugin extends JavaPlugin {
         if (sessionManager != null) {
             sessionManager.endAllSessions();
         }
+        // Ensure plot inventories/gamemode restored for any players still inside plots
+        try {
+            if (playerParkourManager != null) {
+                for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    playerParkourManager.handleExitPlot(p);
+                }
+            }
+        } catch (Throwable ignored) {}
         if (parkourManager != null && storage != null) {
             storage.saveCourses(parkourManager.getCourses());
+            try { storage.shutdown(); } catch (Throwable ignored) {}
         }
     }
 

@@ -1,5 +1,6 @@
-gui:
+﻿gui:
   published:
+    rows: 6
     title: "&3Player Parkours | sort:{sort} | page:{page}/{pages}"
     controls:
       previous: { material: PAPER, name: "&ePrevious" }
@@ -15,10 +16,12 @@ gui:
         - "&7Staff Diff: &c{staffDiff}"
         - "&7By: &b{creators}"
   my-plots:
+    rows: 6
     title: "&2My Parkours | page:{page}/{pages}"
     controls:
       previous: { material: PAPER, name: "&ePrevious" }
       browse: { material: COMPASS, name: "&bBrowse Published" }
+      create: { slot: 50, material: EMERALD_BLOCK, name: "&aCreate New" }
       next: { material: PAPER, name: "&eNext" }
     item:
       material: GRASS_BLOCK
@@ -27,22 +30,48 @@ gui:
         - "&7Status: {published}"
         - "&7Region: &f({minX},{minZ}) size {size}"
   setup:
+    rows: 3
     title: "&3Setup: {course}"
     buttons:
       status: { slot: 4 }
-      set-start: { slot: 10, material: HEAVY_WEIGHTED_PRESSURE_PLATE, name: "&aSet Start", lore: "&7Stand where you want the start, then click." }
-      set-end: { slot: 11, material: LIGHT_WEIGHTED_PRESSURE_PLATE, name: "&aSet End", lore: "&7Look at the end plate, then click." }
-      set-spawn: { slot: 12, material: RED_BED, name: "&aSet Completion Spawn", lore: "&7Stand at the completion spawn, then click." }
+      set-start: { slot: 10, material: HEAVY_WEIGHTED_PRESSURE_PLATE, name: "&cStart Point", lore: "&7Click to set the start point." }
+      set-start-done: { slot: 10, material: HEAVY_WEIGHTED_PRESSURE_PLATE, name: "&aStart Point &aâœ“", lore: "&7Click to update the start point." }
+      set-end: { slot: 11, material: LIGHT_WEIGHTED_PRESSURE_PLATE, name: "&cFinish Plate", lore: "&7Click to set the finish plate." }
+      set-end-done: { slot: 11, material: LIGHT_WEIGHTED_PRESSURE_PLATE, name: "&aFinish Plate &aâœ“", lore: "&7Click to update the finish plate." }
+      set-spawn: { slot: 12, material: RED_BED, name: "&cFinish Spawn", lore: "&7Click to set finish spawn." }
+      set-spawn-done: { slot: 12, material: RED_BED, name: "&aFinish Spawn &aâœ“", lore: "&7Click to update finish spawn." }
       add-checkpoint: { slot: 13, material: STONE_PRESSURE_PLATE, name: "&bAdd Checkpoint", lore: "&7Look at a checkpoint plate, then click." }
-      set-top: { slot: 15, material: BOOK, name: "&eSet Top Hologram", lore: "&7Stand under where it should float." }
-      set-best: { slot: 16, material: NETHER_STAR, name: "&eSet Personal Best Hologram", lore: "&7Stand under where it should float." }
-      set-creator: { slot: 14, material: NAME_TAG, name: "&eSet Creator Hologram", lore: "&7Stand under where it should float." }
+      set-top: { slot: 15, material: BOOK, name: "&cTop Times Hologram", lore: "&7Stand under where it should float." }
+      set-top-done: { slot: 15, material: BOOK, name: "&aTop Times Hologram &aâœ“", lore: "&7Stand under where it should float." }
+      set-best: { slot: 16, material: NETHER_STAR, name: "&cPersonal Best Hologram", lore: "&7Stand under where it should float." }
+      set-best-done: { slot: 16, material: NETHER_STAR, name: "&aPersonal Best Hologram &aâœ“", lore: "&7Stand under where it should float." }
+      set-creator: { slot: 14, material: NAME_TAG, name: "&cCreator Hologram", lore: "&7Stand under where it should float." }
+      set-creator-done: { slot: 14, material: NAME_TAG, name: "&aCreator Hologram &aâœ“", lore: "&7Stand under where it should float." }
+      rename: { slot: 6, material: ANVIL, name: "&bRename Parkour", lore: "&7Click, then type a new name in chat" }
+      set-maxfall: { slot: 20, material: FEATHER, name: "&bMax Fall: &f{distance}", lore: "&7Click, then type a number in chat" }
       teleport: { slot: 22, material: COMPASS, name: "&6Teleport to Plot" }
       publish: { slot: 23, material: LEVER, name: "&6Publish" }
       toggle-test: { slot: 21, material: CLOCK, name: "&bToggle Test Mode" }
       delete: { slot: 24, material: LAVA_BUCKET, name: "&cDelete Parkour" }
       close: { slot: 26, material: BARRIER, name: "&cClose" }
   confirm-delete:
+    rows: 3
     title: "&cDelete &f{course}&c?"
     yes: { slot: 11, material: RED_WOOL, name: "&cConfirm Delete" }
     no: { slot: 15, material: LIME_WOOL, name: "&aCancel" }
+  rating:
+    rows: 3
+    title: "&aRate: {course}"
+    looks:
+      1: { slot: 10, material: LIME_DYE, name: "&eLooks: 1" }
+      2: { slot: 11, material: LIME_DYE, name: "&eLooks: 2" }
+      3: { slot: 12, material: LIME_DYE, name: "&eLooks: 3" }
+      4: { slot: 13, material: LIME_DYE, name: "&eLooks: 4" }
+      5: { slot: 14, material: LIME_DYE, name: "&eLooks: 5" }
+    difficulty:
+      1: { slot: 16, material: RED_DYE, name: "&cDifficulty: 1" }
+      2: { slot: 17, material: RED_DYE, name: "&cDifficulty: 2" }
+      3: { slot: 18, material: RED_DYE, name: "&cDifficulty: 3" }
+      4: { slot: 19, material: RED_DYE, name: "&cDifficulty: 4" }
+      5: { slot: 20, material: RED_DYE, name: "&cDifficulty: 5" }
+

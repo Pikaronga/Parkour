@@ -268,7 +268,12 @@ public class HologramManager implements Listener {
     }
 
     private void log(Level level, String message) {
-        plugin.getLogger().log(level, message);
+        boolean debug = false;
+        try { debug = plugin.getConfigManager().debugEnabled(); } catch (Throwable ignored) {}
+        // Always log warnings and above; gate info/fine by debug flag
+        if (level.intValue() >= Level.WARNING.intValue() || debug) {
+            plugin.getLogger().log(level, message);
+        }
     }
 
     private boolean isLocationReady(Location location, ParkourCourse course, String type) {

@@ -29,11 +29,13 @@ public class MyPlotsGUI {
     }
 
     public static Inventory build(ParkourPlugin plugin, List<ParkourCourse> courses, int page) {
-        int perPage = 45;
+        int rows = plugin.getGuiConfig().rows("my-plots", 6);
+        rows = Math.max(2, rows); // reserve last row for controls
+        int perPage = (rows - 1) * 9;
         int pages = Math.max(1, (int) Math.ceil(courses.size() / (double) perPage));
         int current = Math.max(1, Math.min(page, pages));
         String title = plugin.getGuiConfig().title("my-plots", "&2My Parkours | page:{page}/{pages}", java.util.Map.of("page", Integer.toString(current), "pages", Integer.toString(pages)));
-        Inventory inv = Bukkit.createInventory(null, 54, title);
+        Inventory inv = Bukkit.createInventory(new PluginGuiHolder("my-plots"), rows * 9, title);
 
         int start = (current - 1) * perPage;
         for (int i = 0; i < perPage && start + i < courses.size(); i++) {
@@ -54,14 +56,24 @@ public class MyPlotsGUI {
                         "size", Integer.toString(size)
                 ));
                 meta.setLore(lore);
+                try {
+                    org.bukkit.persistence.PersistentDataContainer pdc = meta.getPersistentDataContainer();
+                    pdc.set(new org.bukkit.NamespacedKey(plugin, "course-name"), org.bukkit.persistence.PersistentDataType.STRING, c.getName());
+                } catch (Throwable ignored) {}
                 item.setItemMeta(meta);
             }
             inv.setItem(i, item);
         }
-        // Controls
-        inv.setItem(45, named(plugin.getGuiConfig().material("my-plots", "controls.previous", Material.PAPER), plugin.getGuiConfig().name("my-plots", "controls.previous", "&ePrevious", java.util.Map.of())));
-        inv.setItem(49, named(plugin.getGuiConfig().material("my-plots", "controls.browse", Material.COMPASS), plugin.getGuiConfig().name("my-plots", "controls.browse", "&bBrowse Published", java.util.Map.of())));
-        inv.setItem(53, named(plugin.getGuiConfig().material("my-plots", "controls.next", Material.PAPER), plugin.getGuiConfig().name("my-plots", "controls.next", "&eNext", java.util.Map.of())));
+        // Controls on last row (allow slot overrides)
+        int base = (rows - 1) * 9;
+        int prevSlot = plugin.getGuiConfig().slot("my-plots", "controls.previous", base + 0);
+        int browseSlot = plugin.getGuiConfig().slot("my-plots", "controls.browse", base + 4);
+        int createSlot = plugin.getGuiConfig().slot("my-plots", "controls.create", base + 6);
+        int nextSlot = plugin.getGuiConfig().slot("my-plots", "controls.next", base + 8);
+        if (prevSlot >= 0 && prevSlot < rows * 9) inv.setItem(prevSlot, named(plugin.getGuiConfig().material("my-plots", "controls.previous", Material.PAPER), plugin.getGuiConfig().name("my-plots", "controls.previous", "&ePrevious", java.util.Map.of()))); else if (prevSlot >= rows * 9) plugin.getLogger().warning("GUI 'my-plots.controls.previous' slot out of range: " + prevSlot);
+        if (browseSlot >= 0 && browseSlot < rows * 9) inv.setItem(browseSlot, named(plugin.getGuiConfig().material("my-plots", "controls.browse", Material.COMPASS), plugin.getGuiConfig().name("my-plots", "controls.browse", "&bBrowse Published", java.util.Map.of()))); else if (browseSlot >= rows * 9) plugin.getLogger().warning("GUI 'my-plots.controls.browse' slot out of range: " + browseSlot);
+        if (createSlot > 0 && createSlot < rows * 9) inv.setItem(createSlot, named(plugin.getGuiConfig().material("my-plots", "controls.create", Material.EMERALD_BLOCK), plugin.getGuiConfig().name("my-plots", "controls.create", "&aCreate New", java.util.Map.of()))); else if (createSlot >= rows * 9) plugin.getLogger().warning("GUI 'my-plots.controls.create' slot out of range: " + createSlot);
+        if (nextSlot >= 0 && nextSlot < rows * 9) inv.setItem(nextSlot, named(plugin.getGuiConfig().material("my-plots", "controls.next", Material.PAPER), plugin.getGuiConfig().name("my-plots", "controls.next", "&eNext", java.util.Map.of()))); else if (nextSlot >= rows * 9) plugin.getLogger().warning("GUI 'my-plots.controls.next' slot out of range: " + nextSlot);
         return inv;
     }
 

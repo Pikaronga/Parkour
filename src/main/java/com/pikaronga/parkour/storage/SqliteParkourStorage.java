@@ -15,6 +15,9 @@ public class SqliteParkourStorage {
     private final ParkourPlugin plugin;
     private final DatabaseManager db;
     private final java.util.concurrent.ExecutorService runWriteExecutor;
+    private final java.util.concurrent.ConcurrentHashMap<UUID, int[]> statsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong globalTotalRuns = new java.util.concurrent.atomic.AtomicLong(0);
+    private volatile org.bukkit.scheduler.BukkitTask totalRunsRefreshTask;
 
     public SqliteParkourStorage(ParkourPlugin plugin, DatabaseManager db) {
         this.plugin = plugin;
@@ -24,6 +27,17 @@ public class SqliteParkourStorage {
             t.setDaemon(true);
             return t;
         });
+    }
+
+    public void shutdown() {
+        try {
+            runWriteExecutor.shutdown();
+            // Wait briefly for queued increments to flush
+            runWriteExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        } catch (Throwable ignored) {}
+        try { if (totalRunsRefreshTask != null) totalRunsRefreshTask.cancel(); } catch (Throwable ignored) {}
     }
 
     /* =========================================================
@@ -94,6 +108,8 @@ public class SqliteParkourStorage {
                     loadCreators(conn, id, c);
                     loadCheckpoints(conn, id, world, c);
                     loadTimes(conn, id, c);
+                    // Ratings
+                    loadRatings(conn, id, c);
                     // Load run counters (per-player + total)
                     try { loadRunCounts(c); } catch (SQLException e) { plugin.getLogger().warning("Failed to load run counts for '" + name + "': " + e.getMessage()); }
 
@@ -336,27 +352,50 @@ public class SqliteParkourStorage {
                     insc.executeBatch();
                 }
 
-                // Times (rewrite best per player)
-                try (PreparedStatement delt = conn.prepareStatement("DELETE FROM times WHERE parkour_id=?")) {
-                    delt.setInt(1, id);
-                    delt.executeUpdate();
-                }
-                try (PreparedStatement inst = conn.prepareStatement(
-                        "INSERT INTO times(parkour_id, uuid, best_nanos) VALUES(?,?,?)")) {
-                    for (Map.Entry<UUID, List<Long>> e : c.getTimes().entrySet()) {
-                        long best = e.getValue().stream().min(Long::compareTo).orElse(Long.MAX_VALUE);
-                        if (best == Long.MAX_VALUE) continue;
-                        inst.setInt(1, id);
-                        inst.setString(2, e.getKey().toString());
-                        inst.setLong(3, best);
-                        inst.addBatch();
+                // Ratings (rewrite; merge keys from both maps)
+                try (PreparedStatement delr = conn.prepareStatement("DELETE FROM ratings WHERE parkour_id=?")) {
+                    delr.setInt(1, id);
+                    delr.executeUpdate();
+                } catch (SQLException ignored) {}
+                try (PreparedStatement insr = conn.prepareStatement(
+                        "INSERT INTO ratings(parkour_id, uuid, look, difficulty) VALUES(?,?,?,?)")) {
+                    java.util.Set<java.util.UUID> uuids = new java.util.HashSet<>();
+                    uuids.addAll(c.getLookRatings().keySet());
+                    uuids.addAll(c.getDifficultyRatings().keySet());
+                    for (java.util.UUID u : uuids) {
+                        Integer look = c.getLookRatings().get(u);
+                        Integer diff = c.getDifficultyRatings().get(u);
+                        insr.setInt(1, id);
+                        insr.setString(2, u.toString());
+                        if (look != null) insr.setInt(3, look); else insr.setNull(3, java.sql.Types.INTEGER);
+                        if (diff != null) insr.setInt(4, diff); else insr.setNull(4, java.sql.Types.INTEGER);
+                        insr.addBatch();
                     }
-                    inst.executeBatch();
-                }
+                    insr.executeBatch();
+                } catch (SQLException ignored) {}
             }
             conn.commit();
         } catch (SQLException e) {
             plugin.getLogger().severe("Failed to save parkours to DB: " + e.getMessage());
+        }
+    }
+
+    private void loadRatings(Connection conn, int parkourId, ParkourCourse c) {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT uuid, look, difficulty FROM ratings WHERE parkour_id=?")) {
+            ps.setInt(1, parkourId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    try {
+                        java.util.UUID u = java.util.UUID.fromString(rs.getString(1));
+                        int look = rs.getInt(2);
+                        if (!rs.wasNull()) c.setLookRating(u, look);
+                        int diff = rs.getInt(3);
+                        if (!rs.wasNull()) c.setDifficultyRating(u, diff);
+                    } catch (IllegalArgumentException ignored) {}
+                }
+            }
+        } catch (SQLException e) {
+            // Older schema may not have ratings; do not fail load
         }
     }
 
@@ -549,7 +588,7 @@ public class SqliteParkourStorage {
     }
 
     public void saveTimesAsync(ParkourCourse course) {
-        // Snapshot on main thread, write async
+        // Snapshot on main thread, write async (safe upsert; never delete)
         Bukkit.getScheduler().runTask(plugin, () -> {
             Map<UUID, List<Long>> snapshot = new HashMap<>();
             for (Map.Entry<UUID, List<Long>> e : course.getTimes().entrySet()) {
@@ -557,24 +596,25 @@ public class SqliteParkourStorage {
             }
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try (Connection conn = db.getConnection()) {
+                    if (snapshot.isEmpty()) {
+                        plugin.getLogger().fine("Skipped saving times for '" + course.getName() + "' due to empty cache.");
+                        return;
+                    }
                     conn.setAutoCommit(false);
                     Integer id = getCourseId(conn, course.getName());
                     if (id != null) {
-                        try (PreparedStatement del = conn.prepareStatement("DELETE FROM times WHERE parkour_id=?")) {
-                            del.setInt(1, id);
-                            del.executeUpdate();
-                        }
-                        try (PreparedStatement ins = conn.prepareStatement(
-                                "INSERT INTO times(parkour_id, uuid, best_nanos) VALUES(?,?,?)")) {
+                        try (PreparedStatement up = conn.prepareStatement(
+                                "INSERT INTO times(parkour_id, uuid, best_nanos, last_updated) VALUES(?,?,?, strftime('%s','now')) " +
+                                "ON CONFLICT(parkour_id, uuid) DO UPDATE SET best_nanos = MIN(times.best_nanos, excluded.best_nanos), last_updated = excluded.last_updated")) {
                             for (Map.Entry<UUID, List<Long>> e : snapshot.entrySet()) {
                                 long best = e.getValue().stream().min(Long::compareTo).orElse(Long.MAX_VALUE);
                                 if (best == Long.MAX_VALUE) continue;
-                                ins.setInt(1, id);
-                                ins.setString(2, e.getKey().toString());
-                                ins.setLong(3, best);
-                                ins.addBatch();
+                                up.setInt(1, id);
+                                up.setString(2, e.getKey().toString());
+                                up.setLong(3, best);
+                                up.addBatch();
                             }
-                            ins.executeBatch();
+                            up.executeBatch();
                         }
                     }
                     conn.commit();
@@ -584,6 +624,236 @@ public class SqliteParkourStorage {
             });
         });
     }
+
+    /* =========================================================
+     *              RUN PERSISTENCE (UPSERT + STATS)
+     * ========================================================= */
+    public void recordRunAsync(ParkourCourse course, UUID playerId, long nanos) {
+        if (course == null || playerId == null) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try (Connection conn = db.getConnection()) {
+                conn.setAutoCommit(false);
+                Integer courseId = getCourseId(conn, course.getName());
+                if (courseId == null) {
+                    conn.rollback();
+                    return;
+                }
+
+                boolean hadBefore = false;
+                try (PreparedStatement chk = conn.prepareStatement("SELECT 1 FROM times WHERE parkour_id=? AND uuid=? LIMIT 1")) {
+                    chk.setInt(1, courseId);
+                    chk.setString(2, playerId.toString());
+                    try (ResultSet rs = chk.executeQuery()) { hadBefore = rs.next(); }
+                }
+
+                // Upsert best time with MIN
+                try (PreparedStatement up = conn.prepareStatement(
+                        "INSERT INTO times(parkour_id, uuid, best_nanos, last_updated) VALUES(?,?,?,strftime('%s','now')) " +
+                                "ON CONFLICT(parkour_id, uuid) DO UPDATE SET best_nanos = MIN(times.best_nanos, excluded.best_nanos), last_updated = excluded.last_updated")) {
+                    up.setInt(1, courseId);
+                    up.setString(2, playerId.toString());
+                    up.setLong(3, nanos);
+                    up.executeUpdate();
+                }
+
+                // Global stats (total runs always +1, completed_courses +1 only on first completion for this course)
+                int completedInc = hadBefore ? 0 : 1;
+                try (PreparedStatement sup = conn.prepareStatement(
+                        "INSERT INTO parkour_stats(uuid, total_runs, completed_courses, last_run) VALUES(?,1,?,strftime('%s','now')) " +
+                                "ON CONFLICT(uuid) DO UPDATE SET total_runs = parkour_stats.total_runs + 1, completed_courses = parkour_stats.completed_courses + excluded.completed_courses, last_run = excluded.last_run")) {
+                    sup.setString(1, playerId.toString());
+                    sup.setInt(2, completedInc);
+                    sup.executeUpdate();
+                }
+
+                // Persist per-course run counts
+                try {
+                    // Reuse existing batching executor if desired, but this is already async and within a transaction
+                    try (PreparedStatement p1 = conn.prepareStatement(
+                            "INSERT INTO parkour_runs(course, player, runs) VALUES(?,?,1) ON CONFLICT(course, player) DO UPDATE SET runs = runs + 1")) {
+                        p1.setString(1, course.getName());
+                        p1.setString(2, playerId.toString());
+                        p1.executeUpdate();
+                    }
+                    try (PreparedStatement p2 = conn.prepareStatement(
+                            "INSERT INTO parkour_run_totals(course, total_runs) VALUES(?,1) ON CONFLICT(course) DO UPDATE SET total_runs = total_runs + 1")) {
+                        p2.setString(1, course.getName());
+                        p2.executeUpdate();
+                    }
+                } catch (SQLException ignored) {}
+
+                conn.commit();
+                // Update in-memory stats caches
+                int[] current = statsCache.getOrDefault(playerId, new int[]{0,0});
+                int newTotal = current[0] + 1;
+                int newCompleted = current[1] + (hadBefore ? 0 : 1);
+                statsCache.put(playerId, new int[]{ newTotal, newCompleted });
+                globalTotalRuns.incrementAndGet();
+            } catch (SQLException e) {
+                plugin.getLogger().warning("Failed to persist run: " + e.getMessage());
+            }
+        });
+    }
+
+    public void deleteBestTimeAsync(String courseName, UUID playerId, java.util.function.Consumer<Boolean> callback) {
+        if (courseName == null || playerId == null) { if (callback != null) callback.accept(false); return; }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean ok = true;
+            try (Connection conn = db.getConnection()) {
+                Integer id = getCourseId(conn, courseName);
+                if (id == null) { ok = false; }
+                else {
+                    try (PreparedStatement ps = conn.prepareStatement("DELETE FROM times WHERE parkour_id=? AND uuid=?")) {
+                        ps.setInt(1, id);
+                        ps.setString(2, playerId.toString());
+                        ps.executeUpdate();
+                    }
+                }
+            } catch (SQLException e) {
+                ok = false;
+                plugin.getLogger().warning("Failed to delete best time: " + e.getMessage());
+            }
+            boolean result = ok;
+            Bukkit.getScheduler().runTask(plugin, () -> { if (callback != null) callback.accept(result); });
+        });
+    }
+
+    public void deleteCourseByNameAsync(String courseName, java.util.function.Consumer<Boolean> callback) {
+        if (courseName == null || courseName.isBlank()) { if (callback != null) callback.accept(false); return; }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean ok = true;
+            try (Connection conn = db.getConnection()) {
+                conn.setAutoCommit(false);
+                // Delete auxiliary run counters first (no FK)
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM parkour_runs WHERE course=?")) {
+                    ps.setString(1, courseName);
+                    ps.executeUpdate();
+                } catch (SQLException ignored) {}
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM parkour_run_totals WHERE course=?")) {
+                    ps.setString(1, courseName);
+                    ps.executeUpdate();
+                } catch (SQLException ignored) {}
+
+                // Delete main course row (cascades to creators/checkpoints/times/ratings)
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM parkours WHERE name=?")) {
+                    ps.setString(1, courseName);
+                    ps.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                ok = false;
+                plugin.getLogger().warning("Failed to delete course '" + courseName + "': " + e.getMessage());
+            }
+            boolean res = ok;
+            Bukkit.getScheduler().runTask(plugin, () -> { if (callback != null) callback.accept(res); });
+        });
+    }
+
+    public void migrateCourseRunCountersAsync(String oldName, String newName, java.util.function.Consumer<Boolean> callback) {
+        if (oldName == null || newName == null || oldName.equalsIgnoreCase(newName)) { if (callback != null) callback.accept(false); return; }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean ok = true;
+            try (Connection conn = db.getConnection()) {
+                conn.setAutoCommit(false);
+                // Merge totals
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO parkour_run_totals(course, total_runs) " +
+                                "SELECT ?, total_runs FROM parkour_run_totals WHERE course=? " +
+                                "ON CONFLICT(course) DO UPDATE SET total_runs = parkour_run_totals.total_runs + excluded.total_runs")) {
+                    ps.setString(1, newName);
+                    ps.setString(2, oldName);
+                    ps.executeUpdate();
+                }
+                // Merge per-player
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO parkour_runs(course, player, runs) " +
+                                "SELECT ?, player, runs FROM parkour_runs WHERE course=? " +
+                                "ON CONFLICT(course, player) DO UPDATE SET runs = parkour_runs.runs + excluded.runs")) {
+                    ps.setString(1, newName);
+                    ps.setString(2, oldName);
+                    ps.executeUpdate();
+                }
+                // Delete old counters
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM parkour_run_totals WHERE course=?")) {
+                    ps.setString(1, oldName);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM parkour_runs WHERE course=?")) {
+                    ps.setString(1, oldName);
+                    ps.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                ok = false;
+                plugin.getLogger().warning("Failed to migrate run counters from '" + oldName + "' to '" + newName + "': " + e.getMessage());
+            }
+            boolean res = ok;
+            Bukkit.getScheduler().runTask(plugin, () -> { if (callback != null) callback.accept(res); });
+        });
+    }
+
+    /* =========================================================
+     *                      PLAYER STATS CACHE
+     * ========================================================= */
+    public int[] getPlayerStatsCached(UUID uuid) {
+        int[] stats = statsCache.get(uuid);
+        if (stats == null) {
+            // Kick off async load, return default [0,0]
+            loadPlayerStatsAsync(uuid, null);
+            return new int[]{0,0};
+        }
+        return stats;
+    }
+
+    public void loadPlayerStatsAsync(UUID uuid, java.util.function.Consumer<int[]> callback) {
+        if (uuid == null) { if (callback != null) callback.accept(new int[]{0,0}); return; }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            int total = 0, completed = 0;
+            try (Connection conn = db.getConnection();
+                 PreparedStatement ps = conn.prepareStatement("SELECT total_runs, completed_courses FROM parkour_stats WHERE uuid=?")) {
+                ps.setString(1, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        total = Math.max(0, rs.getInt(1));
+                        completed = Math.max(0, rs.getInt(2));
+                    }
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().warning("Failed to load player stats: " + e.getMessage());
+            }
+            final int[] out = new int[]{total, completed};
+            statsCache.put(uuid, out);
+            if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(out));
+        });
+    }
+
+    /* =========================================================
+     *                GLOBAL TOTAL RUNS REFRESHER
+     * ========================================================= */
+    public void startStatsTasks() {
+        // Initial refresh now
+        refreshGlobalTotalRunsAsync();
+        // Schedule refresh every 5 minutes
+        try {
+            totalRunsRefreshTask = org.bukkit.Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshGlobalTotalRunsAsync, 5 * 60 * 20L, 5 * 60 * 20L);
+        } catch (Throwable ignored) {}
+    }
+
+    private void refreshGlobalTotalRunsAsync() {
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            long sum = 0L;
+            try (Connection conn = db.getConnection();
+                 PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(total_runs),0) FROM parkour_stats");
+                 ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) sum = rs.getLong(1);
+            } catch (SQLException e) {
+                // do not spam warnings; silent fallback
+            }
+            globalTotalRuns.set(Math.max(0L, sum));
+        });
+    }
+
+    public long getGlobalTotalRunsCached() { return Math.max(0L, globalTotalRuns.get()); }
 
     /* =========================================================
      *                 DATA CLEANUP / MIGRATION

@@ -74,9 +74,27 @@ public class ParkourListener implements Listener {
             switch (action) {
                 case "restart" -> sessionManager.resetToStart(event.getPlayer());
                 case "checkpoint" -> sessionManager.teleportToCheckpoint(event.getPlayer());
-                case "leave" -> sessionManager.endSession(event.getPlayer(), false);
+                case "leave" -> {
+                    // End session and send the player to server spawn instead of course finish
+                    sessionManager.endSession(event.getPlayer(), false, false);
+                    teleportToServerSpawn(event.getPlayer());
+                }
             }
         }
+    }
+
+    private void teleportToServerSpawn(Player player) {
+        // Try using a common /spawn command if a plugin provides it; fall back to default spawn location
+        try {
+            boolean dispatched = player.performCommand("spawn");
+            if (dispatched) return;
+        } catch (Throwable ignored) {}
+        try {
+            org.bukkit.Location loc = player.getServer().getWorlds().isEmpty() ? null : player.getServer().getWorlds().get(0).getSpawnLocation();
+            if (loc != null) {
+                player.teleport(loc);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void handlePressurePlate(Player player, Location blockLocation) {

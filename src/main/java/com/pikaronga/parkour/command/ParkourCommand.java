@@ -49,9 +49,110 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         boolean success = true;
         switch (sub) {
             // Admin subcommands
-            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall" -> {
+            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "deletetime", "deletecourse", "renamecourse" -> {
                 if (!player.hasPermission("parkour.admin")) {
                     player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                    return true;
+                }
+                if (sub.equals("renamecourse")) {
+                    if (args.length < 3) {
+                        player.sendMessage(messageManager.getMessage("admin-rename-usage", "&cUsage: /parkour renamecourse <old> <new>"));
+                        return true;
+                    }
+                    String oldName = args[1];
+                    String newName = args[2];
+                    ParkourCourse src = parkourManager.getCourse(oldName);
+                    if (src == null) {
+                        player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                        return true;
+                    }
+                    if (parkourManager.getCourse(newName) != null) {
+                        player.sendMessage(messageManager.getMessage("rename-exists", "&cA parkour with that name already exists."));
+                        return true;
+                    }
+                    ParkourCourse dst = com.pikaronga.parkour.util.RenameUtil.cloneWithName(src, newName);
+                    // Swap in memory and holograms
+                    plugin.getHologramManager().removeCourseHolograms(src);
+                    parkourManager.removeCourse(src.getName());
+                    parkourManager.getCourses().put(dst.getName().toLowerCase(), dst);
+                    plugin.getHologramManager().createHolograms(dst);
+                    // Persist new row and times, then migrate counters and delete old row
+                    try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
+                    try { plugin.getStorage().saveTimesAsync(dst); } catch (Throwable ignored) {}
+                    plugin.getStorage().migrateCourseRunCountersAsync(oldName, newName, ok -> {
+                        plugin.getStorage().deleteCourseByNameAsync(oldName, delOk -> {
+                            player.sendMessage(messageManager.getMessage("admin-rename-success", "&aRenamed course &f{old}&a to &f{new}&a.", java.util.Map.of("old", oldName, "new", newName)));
+                            plugin.getLogger().info("[Parkour] Admin " + player.getName() + " renamed course '" + oldName + "' -> '" + newName + "'.");
+                        });
+                    });
+                    return true;
+                }
+                if (sub.equals("deletecourse")) {
+                    if (args.length < 2) {
+                        player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour deletecourse <name>"));
+                        return true;
+                    }
+                    String delName = args[1];
+                    ParkourCourse existing = parkourManager.getCourse(delName);
+                    if (existing == null) {
+                        player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                        return true;
+                    }
+                    // Remove holograms and from memory first
+                    plugin.getHologramManager().removeCourseHolograms(existing);
+                    parkourManager.removeCourse(existing.getName());
+                    plugin.getStorage().deleteCourseByNameAsync(existing.getName(), ok -> {
+                        if (ok) {
+                            player.sendMessage("§aDeleted course §f" + delName + "§a and its data.");
+                            plugin.getLogger().info("[Parkour] Admin " + player.getName() + " deleted course " + delName + ".");
+                        } else {
+                            player.sendMessage("§cFailed to delete course.");
+                        }
+                    });
+                    return true;
+                }
+                if (sub.equals("deletetime")) {
+                    if (!player.hasPermission("parkour.admin.deletetime")) {
+                        player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                        return true;
+                    }
+                    if (args.length < 3) {
+                        player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour deletetime <player> <course>"));
+                        return true;
+                    }
+                    String who = args[1];
+                    String courseName = args[2];
+                    ParkourCourse target = parkourManager.getCourse(courseName);
+                    if (target == null) {
+                        player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                        return true;
+                    }
+                    java.util.UUID uid;
+                    org.bukkit.OfflinePlayer off = org.bukkit.Bukkit.getOfflinePlayer(who);
+                    if (off != null && off.getUniqueId() != null) {
+                        uid = off.getUniqueId();
+                    } else {
+                        try { uid = java.util.UUID.fromString(who); } catch (IllegalArgumentException ex) { uid = null; }
+                    }
+                    if (uid == null) {
+                        player.sendMessage(messageManager.getMessage("invalid-player", "&cUnknown player."));
+                        return true;
+                    }
+                    final ParkourCourse tCourse = target;
+                    final java.util.UUID tUid = uid;
+                    final org.bukkit.OfflinePlayer tOff = off;
+                    final org.bukkit.entity.Player senderPlayer = player;
+                    plugin.getStorage().deleteBestTimeAsync(tCourse.getName(), tUid, ok -> {
+                        if (ok) {
+                            // Remove from in-memory cache too
+                            tCourse.getTimes().remove(tUid);
+                            senderPlayer.sendMessage("§aDeleted best time for §f" + (tOff != null && tOff.getName()!=null? tOff.getName(): tUid) + "§a on §f" + tCourse.getName() + "§a.");
+                            plugin.getLogger().info("[Parkour] Admin " + senderPlayer.getName() + " deleted best time for " + (tOff != null && tOff.getName()!=null? tOff.getName(): tUid) + " on " + tCourse.getName() + ".");
+                            try { plugin.getHologramManager().updateHolograms(tCourse); } catch (Throwable ignored) {}
+                        } else {
+                            senderPlayer.sendMessage("§cFailed to delete best time (not found or error)." );
+                        }
+                    });
                     return true;
                 }
                 if (args.length < 2) {
@@ -97,17 +198,26 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("create-cooldown", "&cYou can create a new parkour in &f{seconds}&cs.", java.util.Map.of("seconds", Integer.toString(sec))));
                     return true;
                 }
+                String name;
                 if (args.length < 2) {
-                    player.sendMessage(messageManager.getMessage("create-usage", "&cUsage: /parkour create <name>"));
-                    return true;
+                    // Auto-generate from player's name; ensure uniqueness with numeric suffix
+                    String base = player.getName();
+                    name = base;
+                    int suffix = 1;
+                    while (plugin.getParkourManager().getCourse(name) != null) {
+                        name = base + suffix;
+                        suffix++;
+                        if (suffix > 9999) break;
+                    }
+                } else {
+                    name = args[1];
                 }
-                String name = args[1];
                 long owned = plugin.getParkourManager().getCourses().values().stream().filter(c -> c.getCreators().contains(player.getUniqueId())).count();
                 if (owned >= plugin.getConfigManager().getMaxPerPlayer()) {
                     player.sendMessage(messageManager.getMessage("create-limit", "&cYou have reached your parkour limit."));
                     return true;
                 }
-                if (plugin.getParkourManager().getCourse(name) != null) {
+                if (args.length >= 2 && plugin.getParkourManager().getCourse(name) != null) {
                     player.sendMessage(messageManager.getMessage("create-exists", "&cA parkour with that name already exists."));
                     return true;
                 }
@@ -119,7 +229,46 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 plugin.getPlayerParkourManager().markCreatedNow(player.getUniqueId());
                 plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), created);
                 plugin.getPlayerParkourManager().teleportToPlot(player, created);
+                // Ensure creator is in Creative when entering their new plot
+                try { player.setGameMode(org.bukkit.GameMode.CREATIVE); } catch (Throwable ignored) {}
                 player.sendMessage(messageManager.getMessage("create-success", "&aCreated parkour &f{course}&a. You are now in your plot.", Map.of("course", created.getName())));
+            }
+            case "rename" -> {
+                if (!plugin.getConfigManager().playerParkoursEnabled()) {
+                    player.sendMessage(messageManager.getMessage("feature-disabled", "&cPlayer parkours are disabled."));
+                    return true;
+                }
+                if (!player.hasPermission("parkour.player.edit")) {
+                    player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                    return true;
+                }
+                if (args.length < 3) {
+                    player.sendMessage(messageManager.getMessage("rename-usage", "&cUsage: /parkour rename <current> <new>"));
+                    return true;
+                }
+                String current = args[1];
+                String fresh = args[2];
+                ParkourCourse src = parkourManager.getCourse(current);
+                if (src == null) {
+                    player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                    return true;
+                }
+                if (!src.getCreators().contains(player.getUniqueId())) {
+                    player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+                    return true;
+                }
+                if (parkourManager.getCourse(fresh) != null) {
+                    player.sendMessage(messageManager.getMessage("rename-exists", "&cA parkour with that name already exists."));
+                    return true;
+                }
+                ParkourCourse dst = com.pikaronga.parkour.util.RenameUtil.cloneWithName(src, fresh);
+                plugin.getHologramManager().removeCourseHolograms(src);
+                parkourManager.removeCourse(src.getName());
+                parkourManager.getCourses().put(dst.getName().toLowerCase(), dst);
+                plugin.getHologramManager().createHolograms(dst);
+                plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
+                plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), dst);
+                player.sendMessage(messageManager.getMessage("rename-success", "&aRenamed &f{old}&a to &f{new}", java.util.Map.of("old", current, "new", fresh)));
             }
             case "edit" -> {
                 if (!plugin.getConfigManager().playerParkoursEnabled()) {
@@ -197,7 +346,23 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     case "psettop", "psetholotop10" -> handleSetTopHolo(player, editable);
                     case "psetbest", "psetholobest" -> handleSetBestHolo(player, editable);
                     case "psetcreatorholo" -> {
-                        org.bukkit.Location loc = player.getLocation().clone().add(0, 2, 0);
+                        // Restrict placement to player's own parkour world and plot
+                        if (!plugin.getPlayerParkourManager().isOwner(player, editable)) {
+                            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+                            return true;
+                        }
+                        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
+                        org.bukkit.Location here = player.getLocation();
+                        if (plots == null || here.getWorld() == null || !plots.getUID().equals(here.getWorld().getUID())) {
+                            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+                            return true;
+                        }
+                        com.pikaronga.parkour.player.PlotRegion r = editable.getPlotRegion();
+                        if (r != null && !r.contains(here)) {
+                            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+                            return true;
+                        }
+                        org.bukkit.Location loc = here.clone().add(0, 2, 0);
                         plugin.getHologramManager().setCreatorHologram(editable, loc);
                         player.sendMessage(messageManager.getMessage("set-creator-holo", "&aSet creators hologram for parkour &f{course}&a.", java.util.Map.of("course", editable.getName())));
                     }
@@ -213,13 +378,31 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage(messageManager.getMessage("publish-usage", "&cUsage: /parkour publish <name>"));
+                    player.sendMessage(messageManager.getMessage("publish-usage", "&cUsage: /parkour publish <name> [new-name]"));
                     return true;
                 }
                 ParkourCourse c = parkourManager.getCourse(args[1]);
                 if (c == null || !c.getCreators().contains(player.getUniqueId())) {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
                     return true;
+                }
+                if (args.length >= 3) {
+                    String newName = args[2];
+                    if (parkourManager.getCourse(newName) != null) {
+                        player.sendMessage(messageManager.getMessage("rename-exists", "&cA parkour with that name already exists."));
+                        return true;
+                    }
+                    String oldName = c.getName();
+                    ParkourCourse dst = com.pikaronga.parkour.util.RenameUtil.cloneWithName(c, newName);
+                    plugin.getHologramManager().removeCourseHolograms(c);
+                    parkourManager.removeCourse(oldName);
+                    parkourManager.getCourses().put(dst.getName().toLowerCase(), dst);
+                    plugin.getHologramManager().createHolograms(dst);
+                    // Persist new course row and data, and cleanup old row in DB
+                    try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
+                    try { plugin.getStorage().saveTimesAsync(dst); } catch (Throwable ignored) {}
+                    try { plugin.getStorage().deleteCourseByNameAsync(oldName, null); } catch (Throwable ignored) {}
+                    c = dst;
                 }
                 if (c.getStartPlate() == null || c.getFinishPlate() == null) {
                     player.sendMessage(messageManager.getMessage("publish-missing-points", "&cSet start and end plates before publishing."));
@@ -255,6 +438,30 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 published.removeIf(pc -> !pc.isPublished());
                 com.pikaronga.parkour.gui.PublishedParkoursGUI.open(player, plugin, published, "rate", 1);
             }
+            case "rategui" -> {
+                if (!plugin.getConfigManager().playerParkoursEnabled()) {
+                    player.sendMessage(messageManager.getMessage("feature-disabled", "&cPlayer parkours are disabled."));
+                    return true;
+                }
+                if (!player.hasPermission("parkour.player.rate")) {
+                    player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage(messageManager.getMessage("rategui-usage", "&cUsage: /parkour rategui <name>"));
+                    return true;
+                }
+                ParkourCourse rated = parkourManager.getCourse(args[1]);
+                if (rated == null || !rated.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                    return true;
+                }
+                if (rated.getCreators().contains(player.getUniqueId())) {
+                    player.sendMessage(messageManager.getMessage("rate-own", "&cYou cannot rate your own parkour."));
+                    return true;
+                }
+                com.pikaronga.parkour.gui.RatingGUI.open(player, plugin, rated);
+            }
             case "rate" -> {
                 if (!plugin.getConfigManager().playerParkoursEnabled()) {
                     player.sendMessage(messageManager.getMessage("feature-disabled", "&cPlayer parkours are disabled."));
@@ -282,6 +489,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     int diff = Integer.parseInt(args[3]);
                     rated.setLookRating(player.getUniqueId(), looks);
                     rated.setDifficultyRating(player.getUniqueId(), diff);
+                    try { plugin.getStorage().saveCourses(parkourManager.getCourses()); } catch (Throwable ignored) {}
                     player.sendMessage(messageManager.getMessage("rate-success", "&aYour rating has been recorded."));
                 } catch (NumberFormatException ex) {
                     player.sendMessage(messageManager.getMessage("rate-usage", "&cUsage: /parkour rate <name> <looks 1-5> <diff 1-5>"));
@@ -408,9 +616,24 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSetStart(Player player, ParkourCourse course) {
+        // Restrict to owner's plot region
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Block block = getTargetPressurePlate(player);
         if (block == null) {
             player.sendMessage(messageManager.getMessage("look-at-plate-start", "&cLook at a pressure plate to set the start."));
+            return;
+        }
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (plots == null || block.getWorld() == null || !plots.getUID().equals(block.getWorld().getUID()) || r == null || !r.contains(block.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
+            return;
+        }
+        if (player.getWorld() == null || !plots.getUID().equals(player.getWorld().getUID()) || !r.contains(player.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
             return;
         }
         course.setStartPlate(block.getLocation());
@@ -419,9 +642,20 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSetEnd(Player player, ParkourCourse course) {
+        // Restrict to owner's plot region
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Block block = getTargetPressurePlate(player);
         if (block == null) {
             player.sendMessage(messageManager.getMessage("look-at-plate-end", "&cLook at a pressure plate to set the end."));
+            return;
+        }
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (plots == null || block.getWorld() == null || !plots.getUID().equals(block.getWorld().getUID()) || r == null || !r.contains(block.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
             return;
         }
         course.setFinishPlate(block.getLocation());
@@ -429,14 +663,40 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSetSpawn(Player player, ParkourCourse course) {
+        // Restrict to owner's plot region
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (plots == null || player.getWorld() == null || !plots.getUID().equals(player.getWorld().getUID()) || r == null || !r.contains(player.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
+            return;
+        }
         course.setFinishTeleport(player.getLocation());
         player.sendMessage(messageManager.getMessage("set-completion-spawn", "&aSet completion spawn for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetCheckpoint(Player player, ParkourCourse course) {
+        // Restrict to owner's plot region
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Block block = getTargetPressurePlate(player);
         if (block == null) {
             player.sendMessage(messageManager.getMessage("look-at-plate-checkpoint", "&cLook at a pressure plate to add a checkpoint."));
+            return;
+        }
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (plots == null || block.getWorld() == null || !plots.getUID().equals(block.getWorld().getUID()) || r == null || !r.contains(block.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
+            return;
+        }
+        if (player.getWorld() == null || !plots.getUID().equals(player.getWorld().getUID()) || !r.contains(player.getLocation())) {
+            player.sendMessage(messageManager.getMessage("setup-placement-denied", "&cYou can only configure a parkour from within your own plot."));
             return;
         }
         course.addCheckpoint(new Checkpoint(block.getLocation(), player.getLocation()));
@@ -444,13 +704,45 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSetTopHolo(Player player, ParkourCourse course) {
-        Location location = player.getLocation().clone().add(0, 2, 0);
+        // Restrict placement to player's own parkour world and plot
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
+        Location here = player.getLocation();
+        if (plots == null || here.getWorld() == null || !plots.getUID().equals(here.getWorld().getUID())) {
+            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+            return;
+        }
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (r != null && !r.contains(here)) {
+            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+            return;
+        }
+        Location location = here.clone().add(0, 2, 0);
         hologramManager.setTopHologram(course, location);
         player.sendMessage(messageManager.getMessage("set-top-holo", "&aSet top times hologram for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
 
     private void handleSetBestHolo(Player player, ParkourCourse course) {
-        Location location = player.getLocation().clone().add(0, 2, 0);
+        // Restrict placement to player's own parkour world and plot
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
+        Location here = player.getLocation();
+        if (plots == null || here.getWorld() == null || !plots.getUID().equals(here.getWorld().getUID())) {
+            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+            return;
+        }
+        com.pikaronga.parkour.player.PlotRegion r = course.getPlotRegion();
+        if (r != null && !r.contains(here)) {
+            player.sendMessage(messageManager.getMessage("holo-placement-denied", "&cYou can only place holograms inside your own parkour world."));
+            return;
+        }
+        Location location = here.clone().add(0, 2, 0);
         hologramManager.setBestHologram(course, location);
         player.sendMessage(messageManager.getMessage("set-best-holo", "&aSet personal best hologram for parkour &f{course}&a.", Map.of("course", course.getName())));
     }
@@ -496,16 +788,55 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return Arrays.asList("create", "edit", "setup", "myplots", "publish", "browse", "rate", "test",
                     "psetstart", "psetend", "psetspawn", "psetcheckpoint", "psettop", "psetholotop10", "psetbest", "psetholobest", "psetcreatorholo",
                     "admin", "reload", "rewardbest",
-                    "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "setcreatorholo", "setstaffdiff");
+                    "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "setcreatorholo", "setstaffdiff", "deletetime", "deletecourse", "renamecourse");
         }
         if (args.length == 2) {
             if (args[0].equalsIgnoreCase("browse")) {
                 return Arrays.asList("rate", "difficulty", "name");
             }
+            if (args[0].equalsIgnoreCase("renamecourse") || args[0].equalsIgnoreCase("deletecourse")) {
+                return new java.util.ArrayList<>(parkourManager.getCourseNames());
+            }
+            if (args[0].equalsIgnoreCase("deletetime")) {
+                // Suggest online player names
+                java.util.List<String> names = new java.util.ArrayList<>();
+                for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) names.add(p.getName());
+                return names;
+            }
+            if (sender instanceof Player p) {
+                java.util.UUID uid = p.getUniqueId();
+                String sub = args[0].toLowerCase();
+                java.util.List<String> owned = new java.util.ArrayList<>();
+                for (ParkourCourse c : parkourManager.getCourses().values()) {
+                    if (c.getCreators().contains(uid)) owned.add(c.getName());
+                }
+                // Player-only subcommands that should only suggest own courses
+                java.util.Set<String> ownOnly = new java.util.HashSet<>(java.util.Arrays.asList(
+                        "edit", "setup", "publish",
+                        "psetstart", "psetend", "psetspawn", "psetcheckpoint", "psettop", "psetholotop10", "psetbest", "psetholobest", "psetcreatorholo",
+                        "test", "rategui"
+                ));
+                if (ownOnly.contains(sub)) {
+                    return owned;
+                }
+                if (sub.equals("rate")) {
+                    java.util.List<String> published = new java.util.ArrayList<>();
+                    for (ParkourCourse c : parkourManager.getCourses().values()) {
+                        if (c.isPublished()) published.add(c.getName());
+                    }
+                    return published;
+                }
+            }
             return new ArrayList<>(parkourManager.getCourseNames());
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("browse")) {
             return Arrays.asList("1", "2", "3");
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("deletetime")) {
+            return new java.util.ArrayList<>(parkourManager.getCourseNames());
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("renamecourse")) {
+            return java.util.Collections.emptyList();
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("setmaxfall")) {
             ParkourCourse course = parkourManager.getCourse(args[1]);

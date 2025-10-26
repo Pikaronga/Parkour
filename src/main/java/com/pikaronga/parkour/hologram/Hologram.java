@@ -41,7 +41,7 @@ public class Hologram {
         try { forceLoadChunk(true); } catch (Throwable ignored) {}
         // Ensure world and chunk are loaded for the base location
         if (!ensureWorldAndChunkLoaded(baseLocation)) {
-            Bukkit.getLogger().warning("Hologram.spawn: base location world/chunk not ready for " + baseLocation);
+            try { if (debugEnabled()) plugin.getLogger().info("Hologram.spawn: base location world/chunk not ready for " + baseLocation); } catch (Throwable ignored) {}
             return;
         }
 
@@ -182,15 +182,15 @@ public class Hologram {
             String fallback = "player_parkours";
             World found = Bukkit.getWorld(fallback);
             if (found == null) {
-                Bukkit.getLogger().info("Hologram.ensureWorldAndChunkLoaded: world '" + fallback + "' not loaded; attempting to create it.");
+                try { if (debugEnabled()) plugin.getLogger().info("Hologram.ensureWorldAndChunkLoaded: world '" + fallback + "' not loaded; attempting to create it."); } catch (Throwable ignored) {}
                 try {
                     found = new WorldCreator(fallback).createWorld();
                 } catch (Throwable t) {
-                    Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: Failed to create world '" + fallback + "': " + t.getMessage());
+                    plugin.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: Failed to create world '" + fallback + "': " + t.getMessage());
                 }
             }
             if (found == null) {
-                Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: world is null for location " + loc);
+                plugin.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: world is null for location " + loc);
                 return false;
             }
             loc.setWorld(found);
@@ -200,15 +200,24 @@ public class Hologram {
         int chunkX = loc.getBlockX() >> 4;
         int chunkZ = loc.getBlockZ() >> 4;
         if (!world.isChunkLoaded(chunkX, chunkZ)) {
-            Bukkit.getLogger().info("Hologram.ensureWorldAndChunkLoaded: loading chunk [" + chunkX + "," + chunkZ + "] in world '" + world.getName() + "'.");
+            try { if (debugEnabled()) plugin.getLogger().info("Hologram.ensureWorldAndChunkLoaded: loading chunk [" + chunkX + "," + chunkZ + "] in world '" + world.getName() + "'."); } catch (Throwable ignored) {}
             try {
                 world.getChunkAt(chunkX, chunkZ).load(true);
             } catch (Throwable t) {
-                Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: failed to load chunk: " + t.getMessage());
+                plugin.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: failed to load chunk: " + t.getMessage());
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean debugEnabled() {
+        try {
+            if (plugin instanceof com.pikaronga.parkour.ParkourPlugin p) {
+                return p.getConfigManager().debugEnabled();
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 
     private String formatLocation(Location location) {

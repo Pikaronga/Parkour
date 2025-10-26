@@ -15,6 +15,9 @@ permissions:
   parkour.admin:
     description: Allows management of parkours
     default: op
+  parkour.admin.deletetime:
+    description: Allows deleting a player's best time for a course
+    default: op
   parkour.player:
     description: Allows basic player parkour commands
     default: true
@@ -36,3 +39,9 @@ permissions:
   parkour.player.myplots:
     description: View your own parkours GUI
     default: true
+  parkour.worldedit.bypass:
+    description: Allows using WorldEdit anywhere, ignoring plot restrictions
+    default: op
+  parkour.we.bypass:
+    description: Alias for parkour.worldedit.bypass
+    default: op

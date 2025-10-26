@@ -7,7 +7,7 @@ player-parkours:
     size: 5
     block: "STONE"
   plot-size: 64
-  plot-gap: 16
+  plot-gap: 256
   give-creative: true
   allow-worldedit: true
   worldedit:
@@ -44,3 +44,6 @@ player-parkours:
     interval-days: 7
     winners: 3
     command: "give %player% diamond 3"
+collisions:
+  disable: true
+debug: false

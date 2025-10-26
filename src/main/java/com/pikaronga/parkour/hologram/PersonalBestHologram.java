@@ -74,7 +74,7 @@ public class PersonalBestHologram {
             configureStand(stand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
         });
         if (headerStand != null) {
-            plugin.getLogger().info("Spawned personal best header hologram for '" + course.getName() + "' at " + formatLocation(headerStand.getLocation()) + " (entity=" + headerStand.getUniqueId() + ")");
+            try { if (plugin.getConfigManager().debugEnabled()) plugin.getLogger().info("Spawned personal best header hologram for '" + course.getName() + "' at " + formatLocation(headerStand.getLocation()) + " (entity=" + headerStand.getUniqueId() + ")"); } catch (Throwable ignored) {}
         }
     }
 
@@ -106,7 +106,7 @@ public class PersonalBestHologram {
         // initially hide from all players until we show it for the target player
         Bukkit.getOnlinePlayers().forEach(player -> player.hideEntity(plugin, stand));
         if (stand != null) {
-            plugin.getLogger().fine("Spawned personal best line hologram for '" + course.getName() + "' at " + formatLocation(stand.getLocation()) + " (entity=" + stand.getUniqueId() + ")");
+            try { if (plugin.getConfigManager().debugEnabled()) plugin.getLogger().info("Spawned personal best line hologram for '" + course.getName() + "' at " + formatLocation(stand.getLocation()) + " (entity=" + stand.getUniqueId() + ")"); } catch (Throwable ignored) {}
         }
         return stand;
     }
@@ -235,7 +235,7 @@ public class PersonalBestHologram {
             String fallback = "player_parkours";
             World found = Bukkit.getWorld(fallback);
             if (found == null) {
-                plugin.getLogger().info("World '" + fallback + "' not loaded; attempting to create it now.");
+                try { if (plugin.getConfigManager().debugEnabled()) plugin.getLogger().info("World '" + fallback + "' not loaded; attempting to create it now."); } catch (Throwable ignored) {}
                 try {
                     found = new WorldCreator(fallback).createWorld();
                 } catch (Throwable t) {
@@ -253,7 +253,7 @@ public class PersonalBestHologram {
         int chunkX = loc.getBlockX() >> 4;
         int chunkZ = loc.getBlockZ() >> 4;
         if (!world.isChunkLoaded(chunkX, chunkZ)) {
-            plugin.getLogger().info("Chunk [" + chunkX + "," + chunkZ + "] not loaded in world '" + world.getName() + "'; loading chunk.");
+            try { if (plugin.getConfigManager().debugEnabled()) plugin.getLogger().info("Chunk [" + chunkX + "," + chunkZ + "] not loaded in world '" + world.getName() + "'; loading chunk."); } catch (Throwable ignored) {}
             try {
                 world.getChunkAt(chunkX, chunkZ).load(true);
             } catch (Throwable t) {

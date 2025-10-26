@@ -18,7 +18,7 @@ public class AdminParkoursGUI {
     public static Inventory build(List<ParkourCourse> courses) {
         int size = ((Math.min(courses.size(), 54) + 8) / 9) * 9;
         if (size <= 0) size = 9;
-        Inventory inv = Bukkit.createInventory(null, size, TITLE);
+        Inventory inv = Bukkit.createInventory(new PluginGuiHolder("admin"), size, TITLE);
         int i = 0;
         for (ParkourCourse c : courses) {
             ItemStack item = new ItemStack(c.isPublished() ? Material.EMERALD_BLOCK : Material.REDSTONE_BLOCK);
@@ -49,4 +49,3 @@ public class AdminParkoursGUI {
         return inv;
     }
 }
-

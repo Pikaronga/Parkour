@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ParkourCourse {
 
-    public static final double DEFAULT_MAX_FALL_DISTANCE = 6.0;
+    public static final double DEFAULT_MAX_FALL_DISTANCE = 10.0;
 
     private final String name;
     private Location startPlate;

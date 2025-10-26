@@ -52,11 +52,14 @@ public class PublishedParkoursGUI {
     }
 
     public static Inventory build(ParkourPlugin plugin, List<ParkourCourse> courses, String sort, int page) {
-        int perPage = 45; // 5 rows
+        int rows = plugin.getGuiConfig().rows("published", 6);
+        // Reserve last row for controls; ensure at least 2 rows total
+        rows = Math.max(2, rows);
+        int perPage = (rows - 1) * 9;
         int pages = Math.max(1, (int) Math.ceil(courses.size() / (double) perPage));
         int current = Math.max(1, Math.min(page, pages));
         String title = plugin.getGuiConfig().title("published", "&3Player Parkours | sort:{sort} | page:{page}/{pages}", java.util.Map.of("sort", sort, "page", Integer.toString(current), "pages", Integer.toString(pages)));
-        Inventory inv = Bukkit.createInventory(null, 54, title);
+        Inventory inv = Bukkit.createInventory(new PluginGuiHolder("published"), rows * 9, title);
 
         int start = (current - 1) * perPage;
         for (int i = 0; i < perPage && start + i < courses.size(); i++) {
@@ -84,15 +87,25 @@ public class PublishedParkoursGUI {
                         "creators", creators
                 ));
                 meta.setLore(lore);
+                try {
+                    // Tag the item with the course name for reliable click handling
+                    org.bukkit.persistence.PersistentDataContainer pdc = meta.getPersistentDataContainer();
+                    pdc.set(new org.bukkit.NamespacedKey(plugin, "course-name"), org.bukkit.persistence.PersistentDataType.STRING, c.getName());
+                } catch (Throwable ignored) {}
                 item.setItemMeta(meta);
             }
             inv.setItem(i, item);
         }
-        // Controls
-        inv.setItem(45, named(plugin.getGuiConfig().material("published", "controls.previous", Material.PAPER), plugin.getGuiConfig().name("published", "controls.previous", "&ePrevious", java.util.Map.of())));
-        inv.setItem(47, named(plugin.getGuiConfig().material("published", "controls.my-plots", Material.BOOK), plugin.getGuiConfig().name("published", "controls.my-plots", "&aMy Parkours", java.util.Map.of())));
-        inv.setItem(49, named(plugin.getGuiConfig().material("published", "controls.sort", Material.COMPARATOR), plugin.getGuiConfig().name("published", "controls.sort", "&bSort: {sort}", java.util.Map.of("sort", sort))));
-        inv.setItem(53, named(plugin.getGuiConfig().material("published", "controls.next", Material.PAPER), plugin.getGuiConfig().name("published", "controls.next", "&eNext", java.util.Map.of())));
+        // Controls (last row by default; allow slot overrides)
+        int base = (rows - 1) * 9;
+        int prevSlot = plugin.getGuiConfig().slot("published", "controls.previous", base + 0);
+        int myPlotsSlot = plugin.getGuiConfig().slot("published", "controls.my-plots", base + 2);
+        int sortSlot = plugin.getGuiConfig().slot("published", "controls.sort", base + 4);
+        int nextSlot = plugin.getGuiConfig().slot("published", "controls.next", base + 8);
+        if (prevSlot >= 0 && prevSlot < rows * 9) inv.setItem(prevSlot, named(plugin.getGuiConfig().material("published", "controls.previous", Material.PAPER), plugin.getGuiConfig().name("published", "controls.previous", "&ePrevious", java.util.Map.of()))); else if (prevSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.previous' slot out of range: " + prevSlot);
+        if (myPlotsSlot >= 0 && myPlotsSlot < rows * 9) inv.setItem(myPlotsSlot, named(plugin.getGuiConfig().material("published", "controls.my-plots", Material.BOOK), plugin.getGuiConfig().name("published", "controls.my-plots", "&aMy Parkours", java.util.Map.of()))); else if (myPlotsSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.my-plots' slot out of range: " + myPlotsSlot);
+        if (sortSlot >= 0 && sortSlot < rows * 9) inv.setItem(sortSlot, named(plugin.getGuiConfig().material("published", "controls.sort", Material.COMPARATOR), plugin.getGuiConfig().name("published", "controls.sort", "&bSort: {sort}", java.util.Map.of("sort", sort)))); else if (sortSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.sort' slot out of range: " + sortSlot);
+        if (nextSlot >= 0 && nextSlot < rows * 9) inv.setItem(nextSlot, named(plugin.getGuiConfig().material("published", "controls.next", Material.PAPER), plugin.getGuiConfig().name("published", "controls.next", "&eNext", java.util.Map.of()))); else if (nextSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.next' slot out of range: " + nextSlot);
         return inv;
     }
 

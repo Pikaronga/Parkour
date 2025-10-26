@@ -85,28 +85,32 @@ public class ParkourPlaceholders extends PlaceholderExpansion {
                 }
                 return Integer.toString(count);
             }
-            case "completed_runs": {
-                // Best-effort: sums recorded time entries per course for this player.
-                // Note: due to storage, only best time persists across restarts.
+            case "completed_runs":
+            case "completed_runs_player":
+            case "parkour_completed_runs": {
                 if (offline == null || offline.getUniqueId() == null) return "0";
-                int total = 0;
-                for (ParkourCourse c : pm.getCourses().values()) {
-                    Map<java.util.UUID, java.util.List<Long>> times = c.getTimes();
-                    java.util.List<Long> list = times.get(offline.getUniqueId());
-                    if (list != null) total += list.size();
-                }
-                return Integer.toString(total);
+                int[] stats = plugin.getStorage().getPlayerStatsCached(offline.getUniqueId());
+                // kick off async refresh if not present
+                plugin.getStorage().loadPlayerStatsAsync(offline.getUniqueId(), null);
+                return Integer.toString(Math.max(0, stats[0]));
             }
 
             // Server totals
-            case "completed_runs_total": {
-                int total = 0;
-                for (ParkourCourse c : pm.getCourses().values()) {
-                    for (java.util.List<Long> list : c.getTimes().values()) {
-                        total += list.size();
-                    }
-                }
-                return Integer.toString(total);
+            case "completed_runs_total":
+            case "parkour_completed_runs_total": {
+                long total = plugin.getStorage().getGlobalTotalRunsCached();
+                return Long.toString(Math.max(0L, total));
+            }
+            // Global per-player stats from SQLite (async-backed cache)
+            case "total_runs": {
+                if (offline == null || offline.getUniqueId() == null) return "0";
+                int[] stats = plugin.getStorage().getPlayerStatsCached(offline.getUniqueId());
+                return Integer.toString(stats[0]);
+            }
+            case "completed_courses": {
+                if (offline == null || offline.getUniqueId() == null) return "0";
+                int[] stats = plugin.getStorage().getPlayerStatsCached(offline.getUniqueId());
+                return Integer.toString(stats[1]);
             }
             case "created_parkours_total": {
                 int count = 0;

@@ -65,6 +65,16 @@ public class DatabaseManager {
                     " parkour_id INTEGER NOT NULL,\n" +
                     " uuid TEXT NOT NULL,\n" +
                     " best_nanos INTEGER NOT NULL,\n" +
+                    " last_updated INTEGER,\n" +
+                    " PRIMARY KEY (parkour_id, uuid),\n" +
+                    " FOREIGN KEY (parkour_id) REFERENCES parkours(id) ON DELETE CASCADE\n" +
+                    ")");
+            // Ratings (per-player look and difficulty 1-5)
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS ratings (\n" +
+                    " parkour_id INTEGER NOT NULL,\n" +
+                    " uuid TEXT NOT NULL,\n" +
+                    " look INTEGER,\n" +
+                    " difficulty INTEGER,\n" +
                     " PRIMARY KEY (parkour_id, uuid),\n" +
                     " FOREIGN KEY (parkour_id) REFERENCES parkours(id) ON DELETE CASCADE\n" +
                     ")");
@@ -73,6 +83,10 @@ public class DatabaseManager {
             st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_creators_uuid ON creators(uuid)");
             st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_times_parkour_best ON times(parkour_id, best_nanos)");
             st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_checkpoints_p_on ON checkpoints(parkour_id, ord)");
+            st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_ratings_parkour ON ratings(parkour_id)");
+
+            // Add missing column for legacy installs
+            try { st.executeUpdate("ALTER TABLE times ADD COLUMN last_updated INTEGER"); } catch (SQLException ignored) {}
 
             // Extra columns for plot region and holograms (ALTER TABLE if missing)
             try { st.executeUpdate("ALTER TABLE parkours ADD COLUMN plot_min_x INTEGER"); } catch (SQLException ignored) {}
@@ -100,6 +114,15 @@ public class DatabaseManager {
                     " total_runs INTEGER NOT NULL DEFAULT 0\n" +
                     ")");
             st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_runs_course ON parkour_runs(course)");
+
+            // Global per-player stats
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS parkour_stats (\n" +
+                    " uuid TEXT NOT NULL PRIMARY KEY,\n" +
+                    " total_runs INTEGER NOT NULL DEFAULT 0,\n" +
+                    " completed_courses INTEGER NOT NULL DEFAULT 0,\n" +
+                    " last_run INTEGER\n" +
+                    ")");
+            st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_stats_uuid ON parkour_stats(uuid)");
         }
     }
 }

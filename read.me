@@ -19,6 +19,14 @@ Parkour with checkpoints, holograms, timing, and optional player-made parkours w
 - “Created by …” hologram per course
 - Browse GUI with pagination and sorting
 
+### Collisions
+
+- Global player collisions can be disabled via `collisions.disable` in `config.yml` (default: true). When disabled, all players are placed in a no‑collision team.
+
+### Setup Limits
+
+- All setup actions (start/end plates, spawn, checkpoints, holograms) are restricted to the owner’s plot and plots world. When attempted outside, the message key `setup-placement-denied` is shown (customize in `messages.yml`).
+
 ## Permissions
 
 - `parkour.admin` — admin management

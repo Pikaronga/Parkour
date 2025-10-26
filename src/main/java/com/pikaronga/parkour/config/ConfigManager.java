@@ -120,6 +120,12 @@ public class ConfigManager {
         return config.getBoolean("player-parkours.borders.use-worldborder", true);
     }
 
+    public boolean disableCollisions() {
+        // Default to true (disable collisions) if not present
+        if (!config.contains("collisions.disable")) return true;
+        return config.getBoolean("collisions.disable");
+    }
+
     public boolean rewardsEnabled() {
         return config.getBoolean("player-parkours.rewards.enabled", false);
     }
@@ -139,5 +145,9 @@ public class ConfigManager {
     public void reload() {
         File file = new File(plugin.getDataFolder(), "config.yml");
         this.config = YamlConfiguration.loadConfiguration(file);
+    }
+
+    public boolean debugEnabled() {
+        return config.getBoolean("debug", false);
     }
 }

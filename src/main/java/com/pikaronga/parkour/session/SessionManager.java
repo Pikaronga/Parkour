@@ -47,6 +47,8 @@ public class SessionManager {
             notifyWorldMissing(player, course, "start parkour session");
             return null;
         }
+        // Ensure any previous per-player worldborder is cleared when entering a parkour
+        try { player.setWorldBorder(null); } catch (Throwable ignored) {}
         if (existing != null && existing.getCourse().equals(course)) {
             existing.restoreInventory();
             existing.captureInventory();
@@ -141,6 +143,15 @@ public class SessionManager {
         }
     }
 
+    // Overload allowing callers to choose whether to teleport to course finish
+    public void endSession(Player player, boolean completed, boolean teleportToFinish) {
+        ParkourSession session = sessions.remove(player.getUniqueId());
+        if (session != null) {
+            try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
+            endSession(session, completed, teleportToFinish);
+        }
+    }
+
     private void endSession(ParkourSession session, boolean completed) {
         endSession(session, completed, true);
     }
@@ -150,6 +161,7 @@ public class SessionManager {
         if (completed) {
             long durationNanos = System.nanoTime() - session.getStartTimeNanos();
             session.getPlayer().sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
+            sendRatePrompt(session.getPlayer(), session.getCourse(), TimeUtil.formatDuration(durationNanos));
         } else {
             session.getPlayer().sendMessage(messageManager.getMessage("left-parkour", "&cYou have left the parkour."));
         }
@@ -186,18 +198,40 @@ public class SessionManager {
         }
         if (!session.isTestMode()) {
             player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
-            plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
-            plugin.getHologramManager().updateHolograms(session.getCourse());
+            try { plugin.getHologramManager().updateHolograms(session.getCourse()); } catch (Throwable ignored) {}
+            sendRatePrompt(player, session.getCourse(), TimeUtil.formatDuration(durationNanos));
             // Increment run counters (in-memory immediately; persist asynchronously)
             try {
                 session.getCourse().incrementRunCount(player.getUniqueId());
             } catch (Throwable ignored) {}
             try {
-                plugin.getStorage().queueRunIncrement(session.getCourse().getName(), player.getUniqueId());
+                plugin.getStorage().recordRunAsync(session.getCourse(), player.getUniqueId(), durationNanos);
             } catch (Throwable ignored) {}
         }
         try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
         return durationNanos;
+    }
+
+    private void sendRatePrompt(Player player, ParkourCourse course, String timeStr) {
+        try {
+            if (course == null || !course.isPublished()) return;
+            if (!player.hasPermission("parkour.player.rate")) return;
+            if (course.getCreators().contains(player.getUniqueId())) return;
+            // Do not prompt if the player has already rated this course (looks or difficulty)
+            try {
+                java.util.UUID uid = player.getUniqueId();
+                boolean rated = (course.getLookRatings() != null && course.getLookRatings().containsKey(uid))
+                        || (course.getDifficultyRatings() != null && course.getDifficultyRatings().containsKey(uid));
+                if (rated) return;
+            } catch (Throwable ignored) {}
+            String prefix = messageManager.getMessage("completed-congrats", "&aCongrats on completing &f{course}&a in &e{time}&a! &7Enjoyed the parkour? ", java.util.Map.of("course", course.getName(), "time", timeStr));
+            String clickable = messageManager.getMessage("completed-congrats-rate", "&a[Rate it here]", java.util.Map.of());
+            net.md_5.bungee.api.chat.TextComponent pre = new net.md_5.bungee.api.chat.TextComponent(org.bukkit.ChatColor.translateAlternateColorCodes('&', prefix));
+            net.md_5.bungee.api.chat.TextComponent btn = new net.md_5.bungee.api.chat.TextComponent(org.bukkit.ChatColor.translateAlternateColorCodes('&', clickable));
+            btn.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/parkour rategui " + course.getName()));
+            btn.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT, new net.md_5.bungee.api.chat.ComponentBuilder(org.bukkit.ChatColor.translateAlternateColorCodes('&', "&7Click to open rating")) .create()));
+            player.spigot().sendMessage(pre, btn);
+        } catch (Throwable ignored) {}
     }
 
     public ParkourSession getSession(Player player) {

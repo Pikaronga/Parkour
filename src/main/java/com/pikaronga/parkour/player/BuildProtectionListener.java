@@ -73,6 +73,8 @@ public class BuildProtectionListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         try { event.getPlayer().setWorldBorder(null); } catch (Throwable ignored) {}
+        // Ensure inventories are restored on quit to avoid creative items leaking
+        try { ppm.handleExitPlot(event.getPlayer()); } catch (Throwable ignored) {}
     }
 
     @EventHandler
@@ -99,6 +101,10 @@ public class BuildProtectionListener implements Listener {
                 || lower.startsWith("/worldedit ") || lower.equals("/worldedit")
                 || lower.startsWith("/schem") || lower.startsWith("/schematic");
         if (!isWE) return;
+        // Bypass permission for staff to use WorldEdit anywhere
+        if (player.hasPermission("parkour.worldedit.bypass") || player.hasPermission("parkour.we.bypass")) {
+            return;
+        }
         if (!player.getWorld().equals(ppm.getWorld())) {
             event.setCancelled(true);
             player.sendMessage(org.bukkit.ChatColor.RED + "WorldEdit is only allowed inside player-parkour plots.");

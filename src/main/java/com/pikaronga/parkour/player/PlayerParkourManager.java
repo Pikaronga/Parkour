@@ -21,6 +21,10 @@ public class PlayerParkourManager {
     // Simple grid allocator: index -> (gridX, gridZ)
     private final Set<Long> usedChunks = new HashSet<>();
     private final Map<UUID, GameMode> lastGamemode = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack[]> savedContents = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack[]> savedArmor = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack[]> savedExtra = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack> savedOffhand = new HashMap<>();
     private final Map<UUID, Long> lastCreateTime = new HashMap<>();
     private final Map<UUID, String> lastEditingCourse = new HashMap<>();
     private final Map<UUID, String> testingCourses = new HashMap<>();
@@ -318,6 +322,16 @@ public class PlayerParkourManager {
 
     public void handleEnterPlot(Player player) {
         if (!config.giveCreativeInPlots()) return;
+        // Save inventory state once per entry
+        if (!savedContents.containsKey(player.getUniqueId())) {
+            try {
+                org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+                savedContents.put(player.getUniqueId(), inv.getContents());
+                savedArmor.put(player.getUniqueId(), inv.getArmorContents());
+                savedExtra.put(player.getUniqueId(), inv.getExtraContents());
+                savedOffhand.put(player.getUniqueId(), inv.getItemInOffHand());
+            } catch (Throwable ignored) {}
+        }
         lastGamemode.putIfAbsent(player.getUniqueId(), player.getGameMode());
         player.setGameMode(GameMode.CREATIVE);
         if (config.useWorldBorder()) {
@@ -333,6 +347,21 @@ public class PlayerParkourManager {
         if (prev != null) {
             player.setGameMode(prev);
         }
+        // Restore/clean inventory so creative items don't leak outside plots
+        try {
+            org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+            org.bukkit.inventory.ItemStack[] contents = savedContents.remove(player.getUniqueId());
+            org.bukkit.inventory.ItemStack[] armor = savedArmor.remove(player.getUniqueId());
+            org.bukkit.inventory.ItemStack[] extra = savedExtra.remove(player.getUniqueId());
+            org.bukkit.inventory.ItemStack off = savedOffhand.remove(player.getUniqueId());
+            if (contents != null) inv.setContents(contents);
+            if (armor != null) inv.setArmorContents(armor);
+            if (extra != null) inv.setExtraContents(extra);
+            if (off != null) inv.setItemInOffHand(off);
+            if (contents == null && armor == null && extra == null && off == null) {
+                inv.clear();
+            }
+        } catch (Throwable ignored) {}
         if (config.useWorldBorder()) {
             player.setWorldBorder(null);
         }
