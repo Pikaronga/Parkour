@@ -16,16 +16,13 @@ public class PlotWorldListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         if (!event.getLocation().getWorld().equals(ppm.getWorld())) return;
-        // Block all natural-like spawns to keep plots tidy
-        switch (event.getSpawnReason()) {
-            case NATURAL, CHUNK_GEN, JOCKEY, MOUNT, BREEDING, REINFORCEMENTS, PATROL, VILLAGE_INVASION, DISPENSE_EGG, INFECTION, ENDER_PEARL, SILVERFISH_BLOCK, FROZEN, SHEARED, BEEHIVE -> {
-                event.setCancelled(true);
-            }
-            default -> {
-                // Also block if configured to block all natural spawns
-                if (ppm.getPlugin().getConfigManager().blockNaturalSpawns()) {
+        // Optionally block natural-like spawns to keep plots tidy
+        if (ppm.getPlugin().getConfigManager().blockNaturalSpawns()) {
+            switch (event.getSpawnReason()) {
+                case NATURAL, CHUNK_GEN, JOCKEY, MOUNT, BREEDING, REINFORCEMENTS, PATROL, VILLAGE_INVASION, DISPENSE_EGG, INFECTION, ENDER_PEARL, SILVERFISH_BLOCK, FROZEN, SHEARED, BEEHIVE -> {
                     event.setCancelled(true);
                 }
+                default -> { /* allow other spawn reasons (e.g. PLUGIN, CUSTOM) */ }
             }
         }
     }

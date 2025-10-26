@@ -95,9 +95,21 @@ public class ParkourPlugin extends JavaPlugin {
                     playerParkourManager.redrawAllOutlines();
                 }
             }
-            hologramManager.spawnConfiguredHolograms();
+            // Schedule hologram spawning later to ensure worlds/chunks are fully registered and ticking
+            // (player world creation may schedule its own chunk loads at 40L)
+            Bukkit.getScheduler().runTaskLater(this, () -> hologramManager.spawnConfiguredHolograms(), 80L);
             getLogger().info("Loaded " + parkourManager.getCourses().size() + " parkour course(s).");
         }, 20L);
+
+        // Register PlaceholderAPI placeholders (if PlaceholderAPI is present)
+        try {
+            if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                new com.pikaronga.parkour.placeholder.ParkourPlaceholders(this).register();
+                getLogger().info("Registered PlaceholderAPI expansion 'parkour'.");
+            }
+        } catch (Throwable t) {
+            getLogger().warning("Failed to register PlaceholderAPI expansion: " + t.getMessage());
+        }
     }
 
     @Override

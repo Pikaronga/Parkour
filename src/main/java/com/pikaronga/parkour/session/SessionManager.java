@@ -188,6 +188,13 @@ public class SessionManager {
             player.sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
             plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
             plugin.getHologramManager().updateHolograms(session.getCourse());
+            // Increment run counters (in-memory immediately; persist asynchronously)
+            try {
+                session.getCourse().incrementRunCount(player.getUniqueId());
+            } catch (Throwable ignored) {}
+            try {
+                plugin.getStorage().queueRunIncrement(session.getCourse().getName(), player.getUniqueId());
+            } catch (Throwable ignored) {}
         }
         try { plugin.getCacheManager().stopUsing(session.getCourse()); } catch (Throwable ignored) {}
         return durationNanos;

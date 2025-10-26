@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ParkourCourse {
 
@@ -38,6 +39,10 @@ public class ParkourCourse {
     private final Map<UUID, Integer> difficultyRatings = new HashMap<>();
     private Integer staffDifficulty; // 1-5 optional
     private int placedBlocks = 0;
+
+    // Run counters
+    private final Map<UUID, Integer> playerRunCounts = new ConcurrentHashMap<>();
+    private int totalRunCount = 0;
 
     public ParkourCourse(String name) {
         this.name = name;
@@ -208,4 +213,20 @@ public class ParkourCourse {
     public void setPlacedBlocks(int value) { this.placedBlocks = Math.max(0, value); }
     public void incrementPlacedBlocks() { this.placedBlocks++; }
     public void decrementPlacedBlocks() { if (this.placedBlocks > 0) this.placedBlocks--; }
+
+    // ---- Run counts (persistent via storage) ----
+    public Map<UUID, Integer> getPlayerRunCounts() { return playerRunCounts; }
+    public int getPlayerRunCount(UUID player) { return playerRunCounts.getOrDefault(player, 0); }
+    public int getTotalRunCount() { return Math.max(0, totalRunCount); }
+    public void setTotalRunCount(int total) { this.totalRunCount = Math.max(0, total); }
+    public void setPlayerRunCount(UUID player, int runs) { if (player != null) playerRunCounts.put(player, Math.max(0, runs)); }
+    /**
+     * Increment in-memory counters. Persistent write must be queued by storage layer separately.
+     */
+    public void incrementRunCount(UUID player) {
+        if (player != null) {
+            playerRunCounts.merge(player, 1, Integer::sum);
+        }
+        totalRunCount++;
+    }
 }

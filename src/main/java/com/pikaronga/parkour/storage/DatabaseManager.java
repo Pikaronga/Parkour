@@ -87,6 +87,19 @@ public class DatabaseManager {
             try { st.executeUpdate("ALTER TABLE parkours ADD COLUMN creator_holo_x REAL"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE parkours ADD COLUMN creator_holo_y REAL"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE parkours ADD COLUMN creator_holo_z REAL"); } catch (SQLException ignored) {}
+
+            // Run counters (per-player and totals) for accurate completion counts
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS parkour_runs (\n" +
+                    " course TEXT NOT NULL,\n" +
+                    " player TEXT NOT NULL,\n" +
+                    " runs INTEGER NOT NULL DEFAULT 0,\n" +
+                    " PRIMARY KEY (course, player)\n" +
+                    ")");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS parkour_run_totals (\n" +
+                    " course TEXT NOT NULL PRIMARY KEY,\n" +
+                    " total_runs INTEGER NOT NULL DEFAULT 0\n" +
+                    ")");
+            st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_runs_course ON parkour_runs(course)");
         }
     }
 }

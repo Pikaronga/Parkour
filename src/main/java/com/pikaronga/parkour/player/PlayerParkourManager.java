@@ -129,7 +129,8 @@ public class PlayerParkourManager {
             //noinspection ResultOfMethodCallIgnored
             worldFolder.mkdirs();
         }
-        // Some server paths expect a datapacks config JSON; ensure it's at least an empty object
+        // Some server paths expect a datapacks config JSON; if it's empty or just "{}" it causes MapLike parsing errors
+        // Best-effort: if datapacks.json exists but is empty or equals "{}" then delete it so Paper won't try to parse it.
         try {
             java.io.File dpFolder = new java.io.File(worldFolder, "datapacks");
             if (!dpFolder.exists()) {
@@ -137,32 +138,86 @@ public class PlayerParkourManager {
                 dpFolder.mkdirs();
             }
             java.io.File dpJson = new java.io.File(worldFolder, "datapacks.json");
-            if (!dpJson.exists() || dpJson.length() == 0) {
-                try (java.io.FileWriter fw = new java.io.FileWriter(dpJson)) {
-                    fw.write("{}\n");
+            if (dpJson.exists()) {
+                try {
+                    String content = java.nio.file.Files.readString(dpJson.toPath());
+                    if (content == null || content.trim().isEmpty() || content.trim().equals("{}")) {
+                        // remove the problematic file so Paper won't parse an empty/invalid MapLike
+                        try {
+                            if (dpJson.delete()) {
+                                plugin.getLogger().info("Removed empty or invalid datapacks.json from world folder '" + worldName + "' to avoid MapLike parsing errors.");
+                            } else {
+                                plugin.getLogger().warning("Failed to delete empty datapacks.json in world folder '" + worldName + "'.");
+                            }
+                        } catch (Throwable ignored) {
+                            try { dpJson.delete(); } catch (Throwable ignored2) {}
+                        }
+                    }
+                } catch (Throwable t) {
+                    // if we can't read it, try to delete it to be safe
+                    try {
+                        if (dpJson.delete()) {
+                            plugin.getLogger().info("Deleted unreadable datapacks.json from world folder '" + worldName + "' to avoid MapLike parsing errors.");
+                        } else {
+                            plugin.getLogger().warning("Failed to delete unreadable datapacks.json in world folder '" + worldName + "'.");
+                        }
+                    } catch (Throwable ignored) {
+                    }
                 }
             }
         } catch (Exception ignored) {
         }
 
         WorldCreator wc = new WorldCreator(worldName);
+        // set explicit environment and type to avoid Paper reading invalid datapack JSON
+        wc.environment(org.bukkit.World.Environment.NORMAL);
+        wc.type(org.bukkit.WorldType.FLAT);
         if (config.isVoidWorld()) {
-            // Generate a void world using a custom generator
-            wc.generator(new VoidChunkGenerator());
-            wc.type(org.bukkit.WorldType.FLAT); // keep flat to avoid noise features
-        } else {
-            // Modern flat JSON
-            String flatJson = "{\"biome\":\"minecraft:plains\"," +
-                    "\"layers\":[{" +
-                    "\"block\":\"minecraft:bedrock\",\"height\":1},{" +
-                    "\"block\":\"minecraft:dirt\",\"height\":2},{" +
-                    "\"block\":\"minecraft:grass_block\",\"height\":1}]," +
-                    "\"lakes\":false,\"features\":false,\"structure_overrides\":[]}";
-            wc.type(org.bukkit.WorldType.FLAT);
-            wc.generatorSettings(flatJson);
+            // Prefer an installed VoidGen plugin if present (it may provide a better, server-integrated void generator).
+            boolean voidgenPresent = false;
+            try {
+                org.bukkit.plugin.Plugin p1 = Bukkit.getPluginManager().getPlugin("VoidGen");
+                org.bukkit.plugin.Plugin p2 = Bukkit.getPluginManager().getPlugin("Voidgen");
+                org.bukkit.plugin.Plugin p3 = Bukkit.getPluginManager().getPlugin("voidgen");
+                if (p1 != null || p2 != null || p3 != null) voidgenPresent = true;
+            } catch (Throwable ignored) {}
+
+            if (voidgenPresent) {
+                // Let the server/plugin-provided generator handle world generation for maximum compatibility.
+                plugin.getLogger().info("VoidGen detected; delegating void generation to installed plugin for world '" + worldName + "'.");
+            } else {
+                // Fall back to our simple built-in VoidChunkGenerator
+                wc.generator(new VoidChunkGenerator());
+            }
         }
-        Bukkit.createWorld(wc);
-        plugin.getLogger().info("Ensured player parkour world '" + worldName + "' is loaded.");
+
+        org.bukkit.World created = null;
+        try {
+            created = Bukkit.createWorld(wc);
+        } catch (Throwable t) {
+            plugin.getLogger().warning("Failed to create player parkour world '" + worldName + "': " + t.getMessage());
+        }
+
+        if (created != null) {
+            try { created.setKeepSpawnInMemory(true); } catch (Throwable ignored) {}
+            try { created.setAutoSave(true); } catch (Throwable ignored) {}
+            // load spawn chunk and schedule a delayed verification/tick to ensure entity trackers are active
+            try { created.getChunkAt(0, 0).load(true); } catch (Throwable ignored) {}
+            final org.bukkit.World wref = created;
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                try {
+                    wref.getChunkAt(0, 0).load(true);
+                    wref.setKeepSpawnInMemory(true);
+                    wref.setAutoSave(true);
+                    plugin.getLogger().info("Ensured player parkour world '" + worldName + "' is fully loaded and ticking.");
+                } catch (Throwable t) {
+                    plugin.getLogger().warning("Failed to finalize loading of player parkour world '" + worldName + "': " + t.getMessage());
+                }
+            }, 40L);
+            plugin.getLogger().info("Ensured player parkour world '" + worldName + "' is loaded.");
+        } else {
+            plugin.getLogger().warning("Player parkour world '" + worldName + "' could not be created.");
+        }
     }
 
     public void refreshPlotUsage() {

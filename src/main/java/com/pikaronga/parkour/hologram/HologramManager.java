@@ -4,6 +4,7 @@ import com.pikaronga.parkour.ParkourPlugin;
 import com.pikaronga.parkour.config.HologramTextProvider;
 import com.pikaronga.parkour.course.ParkourCourse;
 import org.bukkit.Bukkit;
+import org.bukkit.WorldCreator;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -100,7 +101,7 @@ public class HologramManager implements Listener {
                     top.despawn();
                     log(Level.INFO, "Despawning stale top hologram for course " + course.getName() + ".");
                 }
-                Hologram hologram = new Hologram(location, hologramKey, identifierFor(course.getName(), "top"));
+                Hologram hologram = new Hologram(location, hologramKey, identifierFor(course.getName(), "top"), plugin);
                 hologram.spawn(lines);
                 topHolograms.put(key, hologram);
                 logHologramSpawn("top", course, location, hologram.getArmorStandEntityIds());
@@ -158,7 +159,7 @@ public class HologramManager implements Listener {
                     creator.destroy();
                     log(Level.INFO, "Despawning stale creator hologram for course " + course.getName() + ".");
                 }
-                CreatorHologram hologram = new CreatorHologram(course, location, textProvider, hologramKey);
+                CreatorHologram hologram = new CreatorHologram(course, location, textProvider, hologramKey, plugin);
                 creatorHolograms.put(key, hologram);
                 logHologramSpawn("creator", course, location, hologram.getEntityIds());
                 log(Level.INFO, "Spawned creator hologram for course " + course.getName() + ".");
@@ -272,9 +273,42 @@ public class HologramManager implements Listener {
 
     private boolean isLocationReady(Location location, ParkourCourse course, String type) {
         if (location.getWorld() == null) {
+            // Attempt to resolve player parkour world as a fallback
+            String playerWorld = plugin.getConfigManager().getPlayerWorldName();
+            if (playerWorld != null) {
+                org.bukkit.World w = Bukkit.getWorld(playerWorld);
+                if (w == null) {
+                    // Try to create the world (same logic as PlayerParkourManager.ensureWorld)
+                    try {
+                        WorldCreator wc = new WorldCreator(playerWorld);
+                        Bukkit.createWorld(wc);
+                        w = Bukkit.getWorld(playerWorld);
+                        log(Level.INFO, "Created fallback player world '" + playerWorld + "' while preparing holograms.");
+                    } catch (Throwable t) {
+                        log(Level.WARNING, "Failed to create fallback player world '" + playerWorld + "': " + t.getMessage());
+                    }
+                }
+                if (w != null) {
+                    location.setWorld(w);
+                }
+            }
+        }
+        if (location.getWorld() == null) {
             log(Level.WARNING, "Cannot spawn " + type + " hologram for course '" + course.getName() + "': world is not loaded.");
             return false;
         }
+
+        // Ensure chunk is loaded
+        try {
+            int chunkX = location.getBlockX() >> 4;
+            int chunkZ = location.getBlockZ() >> 4;
+            org.bukkit.World w = location.getWorld();
+            if (!w.isChunkLoaded(chunkX, chunkZ)) {
+                w.getChunkAt(chunkX, chunkZ).load(true);
+                log(Level.FINE, "Loaded chunk [" + chunkX + "," + chunkZ + "] for hologram at " + formatLocation(location));
+            }
+        } catch (Throwable ignored) {}
+
         return true;
     }
 

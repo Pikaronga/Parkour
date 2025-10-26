@@ -14,10 +14,16 @@ import java.util.function.BiConsumer;
 public class SqliteParkourStorage {
     private final ParkourPlugin plugin;
     private final DatabaseManager db;
+    private final java.util.concurrent.ExecutorService runWriteExecutor;
 
     public SqliteParkourStorage(ParkourPlugin plugin, DatabaseManager db) {
         this.plugin = plugin;
         this.db = db;
+        this.runWriteExecutor = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Parkour-RunWrite");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     /* =========================================================
@@ -88,6 +94,8 @@ public class SqliteParkourStorage {
                     loadCreators(conn, id, c);
                     loadCheckpoints(conn, id, world, c);
                     loadTimes(conn, id, c);
+                    // Load run counters (per-player + total)
+                    try { loadRunCounts(c); } catch (SQLException e) { plugin.getLogger().warning("Failed to load run counts for '" + name + "': " + e.getMessage()); }
 
                     list.add(c);
                     loaded++;
@@ -102,6 +110,68 @@ public class SqliteParkourStorage {
             plugin.getLogger().severe("Failed to load parkours from DB: " + e.getMessage());
         }
         return list;
+    }
+
+    /* =========================================================
+     *                    RUN COUNTS: LOAD/WRITE
+     * ========================================================= */
+    public void loadRunCounts(ParkourCourse course) throws SQLException {
+        if (course == null) return;
+        try (java.sql.Connection conn = db.getConnection()) {
+            // Total runs
+            try (java.sql.PreparedStatement ps = conn.prepareStatement("SELECT total_runs FROM parkour_run_totals WHERE course=?")) {
+                ps.setString(1, course.getName());
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        course.setTotalRunCount(Math.max(0, rs.getInt(1)));
+                    } else {
+                        course.setTotalRunCount(0);
+                    }
+                }
+            }
+            // Per-player runs
+            try (java.sql.PreparedStatement ps = conn.prepareStatement("SELECT player, runs FROM parkour_runs WHERE course=?")) {
+                ps.setString(1, course.getName());
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        try {
+                            java.util.UUID u = java.util.UUID.fromString(rs.getString(1));
+                            int runs = Math.max(0, rs.getInt(2));
+                            course.setPlayerRunCount(u, runs);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                }
+            }
+        }
+    }
+
+    public void queueRunIncrement(String courseName, java.util.UUID playerId) {
+        if (courseName == null || playerId == null) return;
+        runWriteExecutor.submit(() -> saveRunIncrement(courseName, playerId));
+    }
+
+    private void saveRunIncrement(String courseName, java.util.UUID playerId) {
+        try (java.sql.Connection conn = db.getConnection()) {
+            conn.setAutoCommit(false);
+            // Per-player upsert
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO parkour_runs(course, player, runs) VALUES(?,?,1) " +
+                            "ON CONFLICT(course, player) DO UPDATE SET runs = runs + 1")) {
+                ps.setString(1, courseName);
+                ps.setString(2, playerId.toString());
+                ps.executeUpdate();
+            }
+            // Total upsert
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO parkour_run_totals(course, total_runs) VALUES(?,1) " +
+                            "ON CONFLICT(course) DO UPDATE SET total_runs = total_runs + 1")) {
+                ps.setString(1, courseName);
+                ps.executeUpdate();
+            }
+            conn.commit();
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Failed to persist run increment for '" + courseName + "': " + e.getMessage());
+        }
     }
 
     private void readHolo(ResultSet rs, World world, Set<String> cols, ParkourCourse c, String prefix,

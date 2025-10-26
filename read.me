@@ -88,3 +88,31 @@ Ownership checks ensure players can only modify their own courses and holograms.
 - Pagination controls in GUI (Prev/Next); sort toggle in center
 
 After configuring a course, players can step on the start plate to begin a timed run with checkpoints and holographic leaderboards.
+
+## Placeholders (PlaceholderAPI)
+
+Identifier: use with `%parkour_<name>%`
+
+- Current course context
+  - `current_course` — Name of the course currently being played (empty if not in a session)
+  - `current_best_time` — Your best time on the current course, formatted like `1min 55,5sec`
+
+- Personal totals
+  - `completed_parkours` — Number of courses you have completed at least once
+  - `completed_runs` — Best-effort count of your recorded completions across courses
+  - `created_parkours` — Number of player-parkours you own
+
+- Server totals
+  - `completed_runs_total` — Best-effort total of recorded completions on the server
+  - `created_parkours_total` — Total published player-parkours on the server
+
+- Additional
+  - `courses_total` — Total number of courses loaded
+  - `courses_published` — Total number of published courses
+  - `current_best_rank` — Your rank on the current course (empty if unranked)
+  - `current_runs_player` — Accurate count of your completed runs on the current course
+  - `current_runs_total` — Accurate total completed runs for the current course (server-wide)
+
+Notes:
+- The expansion registers automatically when PlaceholderAPI is installed.
+- Accurate run counters are persisted and updated asynchronously on completion; “completed_runs” legacy approximations are still available but prefer `current_runs_*`.

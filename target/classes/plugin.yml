@@ -5,6 +5,7 @@ author: OpenAI
 api-version: 1.21
 softdepend:
   - WorldEdit
+  - PlaceholderAPI
 commands:
   parkour:
     description: Parkour management commands

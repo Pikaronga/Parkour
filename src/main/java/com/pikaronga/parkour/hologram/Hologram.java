@@ -3,6 +3,7 @@ package com.pikaronga.parkour.hologram;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.WorldCreator;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -23,25 +24,28 @@ public class Hologram {
     private final List<ArmorStand> armorStands = new ArrayList<>();
     private final NamespacedKey dataKey;
     private final String identifier;
+    private final org.bukkit.plugin.Plugin plugin;
 
-    public Hologram(Location baseLocation, NamespacedKey dataKey, String identifier) {
+    public Hologram(Location baseLocation, NamespacedKey dataKey, String identifier, org.bukkit.plugin.Plugin plugin) {
         this.baseLocation = baseLocation.clone();
         this.dataKey = dataKey;
         this.identifier = identifier;
+        this.plugin = plugin;
     }
 
     
 
     public void spawn(List<String> lines) {
         despawn();
-        World world = baseLocation.getWorld();
-        if (world == null) {
+        // Keep the hologram chunk loaded while we spawn entities
+        try { forceLoadChunk(true); } catch (Throwable ignored) {}
+        // Ensure world and chunk are loaded for the base location
+        if (!ensureWorldAndChunkLoaded(baseLocation)) {
+            Bukkit.getLogger().warning("Hologram.spawn: base location world/chunk not ready for " + baseLocation);
             return;
         }
-        try {
-            baseLocation.getChunk().load();
-        } catch (Throwable ignored) {
-        }
+
+        World world = baseLocation.getWorld();
         Location current = baseLocation.clone();
         for (int index = 0; index < lines.size(); index++) {
             ArmorStand stand = spawnLine(world, current, lines.get(index));
@@ -90,6 +94,8 @@ public class Hologram {
     }
 
     public void despawn() {
+        // Release any force-loading of the hologram chunk
+        try { forceLoadChunk(false); } catch (Throwable ignored) {}
         for (ArmorStand stand : armorStands) {
             stand.remove();
         }
@@ -109,69 +115,107 @@ public class Hologram {
     }
 
     private ArmorStand spawnLine(World world, Location location, String line) {
+        if (world == null) return null;
         try {
-            // Ensure chunk is loaded before spawning
-            try {
-                if (!location.getChunk().isLoaded()) location.getChunk().load();
-            } catch (Throwable ignored) {}
+            try { if (!location.getChunk().isLoaded()) location.getChunk().load(); } catch (Throwable ignored) {}
 
             ArmorStand stand = world.spawn(location, ArmorStand.class, a -> {
-                // body invisible, name visible
-                a.setInvisible(true);
-                // Do NOT set marker=true here; some server builds hide nameplates for marker armor stands.
-                a.setSmall(true);
                 a.setGravity(false);
-                a.setPersistent(true);
+                a.setSmall(true);
                 a.setBasePlate(false);
                 a.setInvulnerable(true);
+                a.setPersistent(true);
                 a.setSilent(true);
-                // We'll explicitly set name visible after applying the Component name to ensure clients render it.
+                try { a.setRemoveWhenFarAway(false); } catch (Throwable ignored) {}
+
+                // Apply name first, then make invisible so client properly shows the nameplate
+                try { a.customName(LegacyComponentSerializer.legacySection().deserialize(line)); } catch (Throwable t) { try { a.setCustomName(line); } catch (Throwable ignored) {} }
+                try { a.setCustomNameVisible(true); } catch (Throwable ignored) {}
+                try { a.setInvisible(true); } catch (Throwable ignored) {}
             });
 
             if (stand == null) return null;
-
-            // Apply the name using existing helper (handles Adventure and legacy fallback)
-            applyName(stand, line);
-            // Ensure the custom name is visible (set after applying the name to force client update)
-            try { stand.setCustomNameVisible(true); } catch (Throwable ignored) {}
-
-            // Debug logging: world, coords, name visibility, invisibility, custom name contents
-            try {
-                String worldName = (world != null && world.getName() != null) ? world.getName() : "unknown";
-                String coords = String.format("[%.2f, %.2f, %.2f]", location.getX(), location.getY(), location.getZ());
-                boolean nameVisible = stand.isCustomNameVisible();
-                boolean invisible = stand.isInvisible();
-                String cname = "null";
-                try {
-                    if (stand.customName() != null) {
-                        cname = LegacyComponentSerializer.legacySection().serialize(stand.customName());
-                    }
-                } catch (Throwable ignored) {}
-                Bukkit.getLogger().info("[Parkour] Spawned hologram '" + identifier + "' at " + worldName + coords + " (nameVisible=" + nameVisible + ", invisible=" + invisible + ", name=" + cname + ")");
-            } catch (Throwable ignored) {}
-
-            // No ProtocolLib resend here; rely on Bukkit/Paper entity metadata propagation.
-
             return stand;
         } catch (Throwable t) {
             try {
-                // fallback: spawning via entity type
                 ArmorStand stand = (ArmorStand) world.spawnEntity(location, EntityType.ARMOR_STAND);
                 stand.setGravity(false);
-                stand.setMarker(true);
-                stand.setInvisible(true);
-                stand.setCustomNameVisible(true);
-                applyName(stand, line);
-                stand.setBasePlate(false);
                 stand.setSmall(true);
-                stand.setPersistent(true);
+                stand.setBasePlate(false);
                 stand.setInvulnerable(true);
+                stand.setPersistent(true);
                 stand.setSilent(true);
+                try { stand.setRemoveWhenFarAway(false); } catch (Throwable ignored) {}
+                try { stand.customName(LegacyComponentSerializer.legacySection().deserialize(line)); } catch (Throwable t2) { try { stand.setCustomName(line); } catch (Throwable ignored) {} }
+                try { stand.setCustomNameVisible(true); } catch (Throwable ignored) {}
+                try { stand.setInvisible(true); } catch (Throwable ignored) {}
                 return stand;
             } catch (Throwable ex) {
                 return null;
             }
         }
+    }
+
+    private void forceLoadChunk(boolean force) {
+        try {
+            int cx = baseLocation.getBlockX() >> 4;
+            int cz = baseLocation.getBlockZ() >> 4;
+            World w = baseLocation.getWorld();
+            if (w == null) return;
+            try {
+                if (force) {
+                    w.addPluginChunkTicket(cx, cz, plugin);
+                } else {
+                    w.removePluginChunkTicket(cx, cz, plugin);
+                }
+                return;
+            } catch (Throwable ignored) { }
+            try { w.setChunkForceLoaded(cx, cz, force); } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+    }
+
+    private boolean ensureWorldAndChunkLoaded(Location loc) {
+        World world = loc.getWorld();
+        if (world == null) {
+            // attempt to load fallback world by name if available
+            // we don't know which world name to try here; try 'player_parkours' as a likely candidate
+            String fallback = "player_parkours";
+            World found = Bukkit.getWorld(fallback);
+            if (found == null) {
+                Bukkit.getLogger().info("Hologram.ensureWorldAndChunkLoaded: world '" + fallback + "' not loaded; attempting to create it.");
+                try {
+                    found = new WorldCreator(fallback).createWorld();
+                } catch (Throwable t) {
+                    Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: Failed to create world '" + fallback + "': " + t.getMessage());
+                }
+            }
+            if (found == null) {
+                Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: world is null for location " + loc);
+                return false;
+            }
+            loc.setWorld(found);
+            world = found;
+        }
+
+        int chunkX = loc.getBlockX() >> 4;
+        int chunkZ = loc.getBlockZ() >> 4;
+        if (!world.isChunkLoaded(chunkX, chunkZ)) {
+            Bukkit.getLogger().info("Hologram.ensureWorldAndChunkLoaded: loading chunk [" + chunkX + "," + chunkZ + "] in world '" + world.getName() + "'.");
+            try {
+                world.getChunkAt(chunkX, chunkZ).load(true);
+            } catch (Throwable t) {
+                Bukkit.getLogger().warning("Hologram.ensureWorldAndChunkLoaded: failed to load chunk: " + t.getMessage());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String formatLocation(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return "unknown";
+        }
+        return location.getWorld().getName() + String.format("[%.2f, %.2f, %.2f]", location.getX(), location.getY(), location.getZ());
     }
 
     // No ProtocolLib present at compile time; we use a hide/show-with-delay per-player workaround instead.

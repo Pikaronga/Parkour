@@ -15,11 +15,13 @@ public class CreatorHologram {
     private final ParkourCourse course;
     private final Hologram hologram;
     private final HologramTextProvider textProvider;
+    private final org.bukkit.plugin.Plugin plugin;
 
-    public CreatorHologram(ParkourCourse course, Location location, HologramTextProvider textProvider, NamespacedKey hologramKey) {
+    public CreatorHologram(ParkourCourse course, Location location, HologramTextProvider textProvider, NamespacedKey hologramKey, org.bukkit.plugin.Plugin plugin) {
         this.course = course;
-        this.hologram = new Hologram(location, hologramKey, identifier(course));
         this.textProvider = textProvider;
+        this.plugin = plugin;
+        this.hologram = new Hologram(location, hologramKey, identifier(course), plugin);
         List<String> lines = new ArrayList<>();
         lines.add(textProvider.formatCreatorsHeader(course.getName()));
         if (course.getCreators().isEmpty()) {

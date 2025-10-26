@@ -13,6 +13,7 @@ import org.bukkit.NamespacedKey;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.WorldCreator;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -39,16 +40,36 @@ public class PersonalBestHologram {
         this.textProvider = textProvider;
         this.hologramKey = hologramKey;
         this.headerIdentifier = identifierForHeader();
-        spawnHeader();
+        // Ensure spawn runs on main thread and after world is loaded
+        if (!Bukkit.isPrimaryThread()) {
+            plugin.getServer().getScheduler().runTask(plugin, this::spawnHeader);
+        } else {
+            spawnHeader();
+        }
         Bukkit.getOnlinePlayers().forEach(this::prepareForPlayer);
     }
 
     private void spawnHeader() {
-        World world = baseLocation.getWorld();
-        if (world == null) {
+        // Ensure this runs on main thread
+        if (!Bukkit.isPrimaryThread()) {
+            plugin.getServer().getScheduler().runTask(plugin, this::spawnHeader);
             return;
         }
-        try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
+
+        if (!ensureWorldAndChunkLoaded(baseLocation)) {
+            // schedule a retry on the main thread next tick
+            plugin.getServer().getScheduler().runTask(plugin, this::spawnHeader);
+            return;
+        }
+
+        World world = baseLocation.getWorld();
+        if (world == null) {
+            plugin.getLogger().warning("PersonalBestHologram: world still null after ensureWorldAndChunkLoaded for " + formatLocation(baseLocation));
+            return;
+        }
+
+        // Force-load the chunk containing the header so the armor stand will be ticked even when players are absent
+        try { world.setChunkForceLoaded(baseLocation.getBlockX() >> 4, baseLocation.getBlockZ() >> 4, true); } catch (Throwable ignored) {}
         headerStand = world.spawn(baseLocation, ArmorStand.class, stand -> {
             configureStand(stand, textProvider.formatBestHeader(course.getName()), headerIdentifier);
         });
@@ -58,12 +79,28 @@ public class PersonalBestHologram {
     }
 
     private ArmorStand spawnPersonalLine() {
-        World world = baseLocation.getWorld();
+        // Ensure this runs on main thread
+        if (!Bukkit.isPrimaryThread()) {
+            final ArmorStand[] holder = new ArmorStand[1];
+            plugin.getServer().getScheduler().runTask(plugin, () -> holder[0] = spawnPersonalLine());
+            return holder[0];
+        }
+
+        Location loc = baseLocation.clone().add(0, -0.3, 0);
+        if (!ensureWorldAndChunkLoaded(loc)) {
+            // schedule a retry on the main thread next tick
+            final ArmorStand[] holder = new ArmorStand[1];
+            plugin.getServer().getScheduler().runTask(plugin, () -> holder[0] = spawnPersonalLine());
+            return holder[0];
+        }
+
+        World world = loc.getWorld();
         if (world == null) {
+            plugin.getLogger().warning("PersonalBestHologram: world null when spawning personal line at " + formatLocation(loc));
             return null;
         }
-        try { baseLocation.getChunk().load(); } catch (Throwable ignored) {}
-        ArmorStand stand = world.spawn(baseLocation.clone().add(0, -0.3, 0), ArmorStand.class, s -> {
+
+        ArmorStand stand = world.spawn(loc, ArmorStand.class, s -> {
             configureStand(s, textProvider.formatBestEmpty(course.getName()), "");
         });
         // initially hide from all players until we show it for the target player
@@ -78,6 +115,7 @@ public class PersonalBestHologram {
         stand.setGravity(false);
         // Use marker=false so clients render the name reliably in different server implementations
         stand.setMarker(false);
+        try { stand.setRemoveWhenFarAway(false); } catch (Throwable ignored) {}
         stand.setInvisible(true);
         // apply the name first, then make it visible so metadata is applied consistently
         try {
@@ -144,6 +182,10 @@ public class PersonalBestHologram {
     }
 
     public void destroy() {
+        World w = baseLocation.getWorld();
+        if (w != null) {
+            try { w.setChunkForceLoaded(baseLocation.getBlockX() >> 4, baseLocation.getBlockZ() >> 4, false); } catch (Throwable ignored) {}
+        }
         if (headerStand != null) {
             headerStand.remove();
             headerStand = null;
@@ -180,6 +222,47 @@ public class PersonalBestHologram {
 
     private String identifierForPlayer(UUID uuid) {
         return "best:" + course.getName().toLowerCase(Locale.ROOT) + ":" + uuid;
+    }
+
+    /**
+     * Ensure the location's world and the containing chunk are loaded.
+     * If the world is null we attempt to load a known fallback world named "player_parkours".
+     */
+    private boolean ensureWorldAndChunkLoaded(Location loc) {
+        World world = loc.getWorld();
+        if (world == null) {
+            // fallback target used by the plugin for player parkour plots
+            String fallback = "player_parkours";
+            World found = Bukkit.getWorld(fallback);
+            if (found == null) {
+                plugin.getLogger().info("World '" + fallback + "' not loaded; attempting to create it now.");
+                try {
+                    found = new WorldCreator(fallback).createWorld();
+                } catch (Throwable t) {
+                    plugin.getLogger().warning("Failed to create world '" + fallback + "': " + t.getMessage());
+                }
+            }
+            if (found == null) {
+                plugin.getLogger().warning("ensureWorldAndChunkLoaded: world is null and fallback could not be created for location " + formatLocation(loc));
+                return false;
+            }
+            loc.setWorld(found);
+            world = found;
+        }
+
+        int chunkX = loc.getBlockX() >> 4;
+        int chunkZ = loc.getBlockZ() >> 4;
+        if (!world.isChunkLoaded(chunkX, chunkZ)) {
+            plugin.getLogger().info("Chunk [" + chunkX + "," + chunkZ + "] not loaded in world '" + world.getName() + "'; loading chunk.");
+            try {
+                world.getChunkAt(chunkX, chunkZ).load(true);
+            } catch (Throwable t) {
+                plugin.getLogger().warning("Failed to load chunk at " + chunkX + "," + chunkZ + " in world '" + world.getName() + "': " + t.getMessage());
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 

@@ -21,6 +21,7 @@ com\pikaronga\parkour\cache\ParkourCacheManager$Cached.class
 com\pikaronga\parkour\listener\ParkourListener.class
 com\pikaronga\parkour\session\SessionManager.class
 com\pikaronga\parkour\hologram\HologramManager.class
+com\pikaronga\parkour\placeholder\ParkourPlaceholders.class
 com\pikaronga\parkour\hologram\CreatorHologram.class
 com\pikaronga\parkour\hologram\Hologram.class
 com\pikaronga\parkour\ParkourPlugin.class
