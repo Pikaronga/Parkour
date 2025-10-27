@@ -15,6 +15,9 @@ permissions:
   parkour.admin:
     description: Allows management of parkours
     default: op
+  parkour.admin.holocleanup:
+    description: Allows cleaning up stray hologram entities
+    default: op
   parkour.admin.deletetime:
     description: Allows deleting a player's best time for a course
     default: op

@@ -579,8 +579,23 @@ public class SqliteParkourStorage {
             boolean success = ok;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (course != null) {
-                    course.getTimes().clear();
-                    course.getTimes().putAll(loaded);
+                    // Merge loaded best times into in-memory cache without overwriting
+                    // any already-present values (e.g., newly achieved bests not yet saved).
+                    for (Map.Entry<UUID, java.util.List<Long>> e : loaded.entrySet()) {
+                        UUID player = e.getKey();
+                        java.util.List<Long> cur = course.getTimes().computeIfAbsent(player, k -> new java.util.ArrayList<>());
+                        java.util.List<Long> fromDb = e.getValue();
+                        if (fromDb != null) {
+                            for (Long v : fromDb) {
+                                if (v != null) cur.add(v);
+                            }
+                        }
+                        // Keep list small and sorted (best first) for efficiency
+                        cur.sort(Long::compareTo);
+                        if (cur.size() > 3) {
+                            cur.subList(3, cur.size()).clear();
+                        }
+                    }
                 }
                 callback.accept(course, success);
             });

@@ -227,7 +227,100 @@ public class HologramManager implements Listener {
                 creator.destroy();
                 log(Level.INFO, "Removed creator hologram for removed course " + course.getName() + ".");
             }
+            // Deep-clean any stray ArmorStands with our hologram key still present for this course
+            try { purgeWorldEntitiesForCourse(key); } catch (Throwable t) { log(Level.FINE, "Purge for course '" + key + "' failed: " + t.getMessage()); }
+            // Also purge by known locations using scoreboard tag to catch legacy entities without PDC keys
+            try { purgeNearbyTagged(course.getTopHologramLocation()); } catch (Throwable ignored) {}
+            try { purgeNearbyTagged(course.getBestHologramLocation()); } catch (Throwable ignored) {}
+            try { purgeNearbyTagged(course.getCreatorHologramLocation()); } catch (Throwable ignored) {}
         });
+    }
+
+    private int purgeWorldEntitiesForCourse(String courseKey) {
+        if (hologramKey == null || courseKey == null || courseKey.isBlank()) return 0;
+        int removed = 0;
+        for (org.bukkit.World w : Bukkit.getWorlds()) {
+            try {
+                for (org.bukkit.entity.ArmorStand as : w.getEntitiesByClass(org.bukkit.entity.ArmorStand.class)) {
+                    String id = null;
+                    try { id = as.getPersistentDataContainer().get(hologramKey, org.bukkit.persistence.PersistentDataType.STRING); } catch (Throwable ignored) {}
+                    if (id == null || id.isBlank()) continue;
+                    // Expect formats: top:course:idx, creator:course[:idx], best:course:header or best:course:uuid
+                    String lowered = id.toLowerCase(Locale.ROOT);
+                    String[] parts = lowered.split(":");
+                    if (parts.length >= 2 && courseKey.equals(parts[1])) {
+                        as.remove();
+                        removed++;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return removed;
+    }
+
+    private int purgeNearbyTagged(Location base) {
+        if (base == null || base.getWorld() == null) return 0;
+        org.bukkit.World w = base.getWorld();
+        double hr = 1.6; // horizontal radius
+        double vr = 8.0; // vertical range to cover stacked lines
+        int removed = 0;
+        try {
+            java.util.Collection<org.bukkit.entity.Entity> near = w.getNearbyEntities(base, hr, vr, hr, e -> e instanceof org.bukkit.entity.ArmorStand);
+            for (org.bukkit.entity.Entity e : near) {
+                try {
+                    org.bukkit.entity.ArmorStand as = (org.bukkit.entity.ArmorStand) e;
+                    // Remove only our tagged holograms
+                    if (as.getScoreboardTags() != null && as.getScoreboardTags().contains("parkour_holo")) {
+                        as.remove();
+                        removed++;
+                    }
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+        return removed;
+    }
+
+    // Public utilities for admin cleanup
+    public int cleanupHologramsByCourseName(String courseName) {
+        if (courseName == null || courseName.isBlank()) return 0;
+        String key = courseName.toLowerCase(Locale.ROOT);
+        int removed = 0;
+        // If we still have the course loaded, use full path which also despawns tracked
+        ParkourCourse maybe = parkourManager.getCourse(key);
+        if (maybe != null) {
+            removeCourseHolograms(maybe);
+        }
+        removed += purgeWorldEntitiesForCourse(key);
+        return removed;
+    }
+
+    public int cleanupAllHologramEntities() {
+        int removed = 0;
+        for (org.bukkit.World w : Bukkit.getWorlds()) {
+            try {
+                for (org.bukkit.entity.ArmorStand as : w.getEntitiesByClass(org.bukkit.entity.ArmorStand.class)) {
+                    boolean ours = false;
+                    // PDC-based identification
+                    try {
+                        String id = hologramKey != null ? as.getPersistentDataContainer().get(hologramKey, org.bukkit.persistence.PersistentDataType.STRING) : null;
+                        if (id != null && !id.isBlank()) ours = true;
+                    } catch (Throwable ignored) {}
+                    // Legacy scoreboard tag
+                    try {
+                        if (!ours && as.getScoreboardTags() != null && as.getScoreboardTags().contains("parkour_holo")) ours = true;
+                    } catch (Throwable ignored) {}
+                    if (ours) {
+                        as.remove();
+                        removed++;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        // Also clear any tracked maps; entities are gone anyway
+        topHolograms.clear();
+        bestHolograms.clear();
+        creatorHolograms.clear();
+        return removed;
     }
 
     @EventHandler

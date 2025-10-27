@@ -49,9 +49,36 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         boolean success = true;
         switch (sub) {
             // Admin subcommands
-            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "deletetime", "deletecourse", "renamecourse" -> {
+            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "deletetime", "deletecourse", "renamecourse", "holocleanup" -> {
                 if (!player.hasPermission("parkour.admin")) {
                     player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                    return true;
+                }
+                if (sub.equals("holocleanup")) {
+                    if (!player.hasPermission("parkour.admin.holocleanup")) {
+                        player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                        return true;
+                    }
+                    if (args.length < 2) {
+                        player.sendMessage(messageManager.getMessage("usage", "&cUsage: /parkour holocleanup <course|all>"));
+                        return true;
+                    }
+                    String target = args[1];
+                    int removed = 0;
+                    if ("all".equalsIgnoreCase(target)) {
+                        removed = plugin.getHologramManager().cleanupAllHologramEntities();
+                        player.sendMessage(messageManager.getMessage("holo-cleaned-all", "&aCleaned up &f{count}&a hologram entities.", java.util.Map.of("count", Integer.toString(removed))));
+                        return true;
+                    }
+                    ParkourCourse c = parkourManager.getCourse(target);
+                    if (c != null) {
+                        plugin.getHologramManager().removeCourseHolograms(c);
+                        removed = plugin.getHologramManager().cleanupHologramsByCourseName(c.getName());
+                        player.sendMessage(messageManager.getMessage("holo-cleaned-course", "&aCleaned holograms for &f{course}&a (&f{count}&a removed).", java.util.Map.of("course", c.getName(), "count", Integer.toString(removed))));
+                    } else {
+                        removed = plugin.getHologramManager().cleanupHologramsByCourseName(target);
+                        player.sendMessage(messageManager.getMessage("holo-cleaned-old", "&aCleaned stray holograms for old course name &f{course}&a (&f{count}&a removed).", java.util.Map.of("course", target, "count", Integer.toString(removed))));
+                    }
                     return true;
                 }
                 if (sub.equals("renamecourse")) {
@@ -788,20 +815,26 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             return Arrays.asList("create", "edit", "setup", "myplots", "publish", "browse", "rate", "test",
                     "psetstart", "psetend", "psetspawn", "psetcheckpoint", "psettop", "psetholotop10", "psetbest", "psetholobest", "psetcreatorholo",
                     "admin", "reload", "rewardbest",
-                    "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "setcreatorholo", "setstaffdiff", "deletetime", "deletecourse", "renamecourse");
+                    "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "setcreatorholo", "setstaffdiff", "deletetime", "deletecourse", "renamecourse", "holocleanup");
         }
         if (args.length == 2) {
             if (args[0].equalsIgnoreCase("browse")) {
                 return Arrays.asList("rate", "difficulty", "name");
             }
-            if (args[0].equalsIgnoreCase("renamecourse") || args[0].equalsIgnoreCase("deletecourse")) {
+            if (args[0].equalsIgnoreCase("renamecourse") || args[0].equalsIgnoreCase("deletecourse") || args[0].equalsIgnoreCase("holocleanup")) {
                 return new java.util.ArrayList<>(parkourManager.getCourseNames());
             }
             if (args[0].equalsIgnoreCase("deletetime")) {
                 // Suggest online player names
                 java.util.List<String> names = new java.util.ArrayList<>();
                 for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) names.add(p.getName());
+                // Also suggest 'all' for holocleanup
                 return names;
+            }
+            if (args[0].equalsIgnoreCase("holocleanup")) {
+                java.util.List<String> list = new java.util.ArrayList<>(parkourManager.getCourseNames());
+                list.add("all");
+                return list;
             }
             if (sender instanceof Player p) {
                 java.util.UUID uid = p.getUniqueId();
