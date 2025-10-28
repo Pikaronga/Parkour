@@ -26,11 +26,12 @@ public class RatingGUIListener implements Listener {
         String courseName = stripped.replace(base, "").replace(":", "").trim();
         ParkourCourse course = plugin.getParkourManager().getCourse(courseName);
         if (course == null || !course.isPublished()) { player.closeInventory(); return; }
-        if (course.getCreators().contains(player.getUniqueId())) { player.closeInventory(); return; }
+        boolean isCreator = course.getCreators().contains(player.getUniqueId());
         int clickedSlot = event.getRawSlot();
         for (int i = 1; i <= 5; i++) {
             int slotL = plugin.getGuiConfig().slot("rating", "looks." + i, 9 + i);
             if (clickedSlot == slotL) {
+                if (isCreator) { player.closeInventory(); return; } // creators cannot rate looks
                 course.setLookRating(player.getUniqueId(), i);
                 try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
                 player.sendMessage(plugin.getMessageManager().getMessage("rating-thanks", "&aThanks for rating &f{course}&a!", java.util.Map.of("course", course.getName())));

@@ -21,44 +21,78 @@ public class PublishedParkoursGUI {
     public static void open(Player player, ParkourPlugin plugin, List<ParkourCourse> allCourses, String sort, int page) {
         List<ParkourCourse> courses = new ArrayList<>(allCourses);
         courses.removeIf(pc -> !pc.isPublished());
-        sort = normalizeSort(sort);
-        sortCourses(courses, sort);
-        Inventory inv = build(plugin, courses, sort, page);
+        SortSpec spec = normalizeSort(sort);
+        sortCourses(courses, spec);
+        Inventory inv = build(plugin, courses, spec, page);
         player.openInventory(inv);
     }
 
-    private static String normalizeSort(String s) {
-        if (s == null) return "rate";
-        return switch (s.toLowerCase()) {
-            case "rate", "looks" -> "rate";
+    private record SortSpec(String key, boolean ascending) {}
+
+    private static SortSpec normalizeSort(String s) {
+        if (s == null || s.isBlank()) return new SortSpec("looks", false); // default: best -> worst
+        String raw = s.toLowerCase();
+        String key = raw;
+        boolean asc = false;
+        if (raw.contains(":")) {
+            String[] parts = raw.split(":", 2);
+            key = parts[0];
+            asc = parts[1].startsWith("asc");
+        }
+        key = switch (key) {
+            case "rate", "looks" -> "looks";
             case "difficulty", "diff" -> "difficulty";
             case "name" -> "name";
-            default -> "rate";
+            case "created", "date", "newest" -> "created";
+            default -> "looks";
         };
+        return new SortSpec(key, asc);
     }
 
-    private static void sortCourses(List<ParkourCourse> courses, String sort) {
-        switch (sort) {
-            case "rate" -> courses.sort(Comparator.comparingDouble(ParkourCourse::getAverageLookRating).reversed().thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER));
-            case "difficulty" -> courses.sort(Comparator.comparingDouble(PublishedParkoursGUI::effectiveDifficulty).thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER));
-            case "name" -> courses.sort(Comparator.comparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER));
+    private static void sortCourses(List<ParkourCourse> courses, SortSpec spec) {
+        Comparator<ParkourCourse> cmp;
+        switch (spec.key) {
+            case "looks" -> cmp = Comparator.comparingDouble(ParkourCourse::getAverageLookRating)
+                    .thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER);
+            case "difficulty" -> cmp = Comparator.comparingDouble(PublishedParkoursGUI::playerDifficulty)
+                    .thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER);
+            case "name" -> cmp = Comparator.comparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER);
+            case "created" -> cmp = Comparator.comparingInt(ParkourCourse::getCreatedOrder)
+                    .thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER);
+            default -> cmp = Comparator.comparingDouble(ParkourCourse::getAverageLookRating)
+                    .thenComparing(ParkourCourse::getName, String.CASE_INSENSITIVE_ORDER);
         }
+        if (!spec.ascending) {
+            // Descending for looks (best->worst), difficulty (hard->easy), name (Z->A), created (newest->oldest)
+            cmp = cmp.reversed();
+        }
+        courses.sort(cmp);
     }
 
-    private static double effectiveDifficulty(ParkourCourse c) {
-        if (c.getStaffDifficulty() != null) return c.getStaffDifficulty();
+    private static double playerDifficulty(ParkourCourse c) {
         double avg = c.getAverageDifficultyRating();
-        return avg <= 0 ? 3.0 : avg;
+        return Math.max(0.0, avg);
     }
 
-    public static Inventory build(ParkourPlugin plugin, List<ParkourCourse> courses, String sort, int page) {
+    private static String formatDifficulty(ParkourCourse c) {
+        double avg = c.getAverageDifficultyRating();
+        String player = (avg <= 0.0) ? "N/A" : String.format("%.1f", avg);
+        Integer staff = c.getStaffDifficulty();
+        if (staff != null) {
+            return player + " (Staff: " + staff + ")";
+        }
+        return player;
+    }
+
+    public static Inventory build(ParkourPlugin plugin, List<ParkourCourse> courses, SortSpec spec, int page) {
         int rows = plugin.getGuiConfig().rows("published", 6);
         // Reserve last row for controls; ensure at least 2 rows total
         rows = Math.max(2, rows);
         int perPage = (rows - 1) * 9;
         int pages = Math.max(1, (int) Math.ceil(courses.size() / (double) perPage));
         int current = Math.max(1, Math.min(page, pages));
-        String title = plugin.getGuiConfig().title("published", "&3Player Parkours | sort:{sort} | page:{page}/{pages}", java.util.Map.of("sort", sort, "page", Integer.toString(current), "pages", Integer.toString(pages)));
+        String sortLabel = spec.key + ":" + (spec.ascending ? "asc" : "desc");
+        String title = plugin.getGuiConfig().title("published", "&3Player Parkours | sort:{sort} | page:{page}/{pages}", java.util.Map.of("sort", sortLabel, "page", Integer.toString(current), "pages", Integer.toString(pages)));
         Inventory inv = Bukkit.createInventory(new PluginGuiHolder("published"), rows * 9, title);
 
         int start = (current - 1) * perPage;
@@ -77,13 +111,13 @@ public class PublishedParkoursGUI {
                     }
                     creators = cs.toString();
                 }
-                String staff = c.getStaffDifficulty() != null ? Integer.toString(c.getStaffDifficulty()) : "-";
+                String staff = c.getStaffDifficulty() != null ? Integer.toString(c.getStaffDifficulty()) : null;
                 meta.setDisplayName(plugin.getGuiConfig().itemName("published", "&6{course}", java.util.Map.of("course", c.getName())));
-                List<String> lore = plugin.getGuiConfig().itemLore("published", java.util.List.of("&7Looks: &e{looks}", "&7Difficulty: &e{difficulty}", "&7Staff Diff: &c{staffDiff}", "&7By: &b{creators}"), java.util.Map.of(
+                String difficultyStr = formatDifficulty(c);
+                List<String> lore = plugin.getGuiConfig().itemLore("published", java.util.List.of("&7Looks: &e{looks}", "&7Difficulty: &e{difficulty}", "&7By: &b{creators}"), java.util.Map.of(
                         "course", c.getName(),
                         "looks", String.format("%.1f", c.getAverageLookRating()),
-                        "difficulty", String.format("%.1f", effectiveDifficulty(c)),
-                        "staffDiff", staff,
+                        "difficulty", difficultyStr,
                         "creators", creators
                 ));
                 meta.setLore(lore);
@@ -104,7 +138,7 @@ public class PublishedParkoursGUI {
         int nextSlot = plugin.getGuiConfig().slot("published", "controls.next", base + 8);
         if (prevSlot >= 0 && prevSlot < rows * 9) inv.setItem(prevSlot, named(plugin.getGuiConfig().material("published", "controls.previous", Material.PAPER), plugin.getGuiConfig().name("published", "controls.previous", "&ePrevious", java.util.Map.of()))); else if (prevSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.previous' slot out of range: " + prevSlot);
         if (myPlotsSlot >= 0 && myPlotsSlot < rows * 9) inv.setItem(myPlotsSlot, named(plugin.getGuiConfig().material("published", "controls.my-plots", Material.BOOK), plugin.getGuiConfig().name("published", "controls.my-plots", "&aMy Parkours", java.util.Map.of()))); else if (myPlotsSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.my-plots' slot out of range: " + myPlotsSlot);
-        if (sortSlot >= 0 && sortSlot < rows * 9) inv.setItem(sortSlot, named(plugin.getGuiConfig().material("published", "controls.sort", Material.COMPARATOR), plugin.getGuiConfig().name("published", "controls.sort", "&bSort: {sort}", java.util.Map.of("sort", sort)))); else if (sortSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.sort' slot out of range: " + sortSlot);
+        if (sortSlot >= 0 && sortSlot < rows * 9) inv.setItem(sortSlot, named(plugin.getGuiConfig().material("published", "controls.sort", Material.COMPARATOR), plugin.getGuiConfig().name("published", "controls.sort", "&bSort: {sort}", java.util.Map.of("sort", sortLabel)))); else if (sortSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.sort' slot out of range: " + sortSlot);
         if (nextSlot >= 0 && nextSlot < rows * 9) inv.setItem(nextSlot, named(plugin.getGuiConfig().material("published", "controls.next", Material.PAPER), plugin.getGuiConfig().name("published", "controls.next", "&eNext", java.util.Map.of()))); else if (nextSlot >= rows * 9) plugin.getLogger().warning("GUI 'published.controls.next' slot out of range: " + nextSlot);
         return inv;
     }

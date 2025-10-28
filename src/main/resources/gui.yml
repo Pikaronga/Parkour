@@ -75,3 +75,4 @@
       4: { slot: 19, material: RED_DYE, name: "&cDifficulty: 4" }
       5: { slot: 20, material: RED_DYE, name: "&cDifficulty: 5" }
 
+config-version: 1

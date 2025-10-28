@@ -54,17 +54,18 @@ public class ParkourPlaceholders extends PlaceholderExpansion {
         switch (key) {
             // Current course context (if the player is in a session)
             case "current_course": {
-                if (player == null) return "";
+                if (player == null) return "N/A";
                 ParkourSession s = plugin.getSessionManager().getSession(player);
-                return s == null ? "" : s.getCourse().getName();
+                ParkourCourse c = (s != null) ? s.getCourse() : plugin.getPlayerParkourManager() != null ? plugin.getPlayerParkourManager().getCourseByLocation(player.getLocation()).orElse(null) : null;
+                return c == null ? "N/A" : c.getName();
             }
             case "current_best_time": {
-                if (player == null) return "";
+                if (player == null) return "N/A";
                 ParkourSession s = plugin.getSessionManager().getSession(player);
-                if (s == null) return "";
-                ParkourCourse c = s.getCourse();
+                ParkourCourse c = (s != null) ? s.getCourse() : plugin.getPlayerParkourManager() != null ? plugin.getPlayerParkourManager().getCourseByLocation(player.getLocation()).orElse(null) : null;
+                if (c == null) return "N/A";
                 long bestNanos = c.getBestTime(player.getUniqueId());
-                if (bestNanos <= 0) return "";
+                if (bestNanos <= 0) return "N/A";
                 return formatHuman(bestNanos);
             }
 
@@ -143,18 +144,18 @@ public class ParkourPlaceholders extends PlaceholderExpansion {
                 return Integer.toString(count);
             }
             case "current_best_rank": {
-                if (player == null) return "";
+                if (player == null) return "N/A";
                 ParkourSession s = plugin.getSessionManager().getSession(player);
-                if (s == null) return "";
-                ParkourCourse c = s.getCourse();
+                ParkourCourse c = (s != null) ? s.getCourse() : plugin.getPlayerParkourManager() != null ? plugin.getPlayerParkourManager().getCourseByLocation(player.getLocation()).orElse(null) : null;
+                if (c == null) return "N/A";
                 long best = c.getBestTime(player.getUniqueId());
-                if (best <= 0) return "";
+                if (best <= 0) return "N/A";
                 int idx = 1;
                 for (var e : c.getTopTimes(plugin.getConfigManager().getTopHologramSize())) {
                     if (e.getKey().equals(player.getUniqueId())) return Integer.toString(idx);
                     idx++;
                 }
-                return "";
+                return "N/A";
             }
 
             default:

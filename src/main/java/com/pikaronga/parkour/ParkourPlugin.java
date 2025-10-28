@@ -38,6 +38,8 @@ public class ParkourPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        // Migrate configs before managers read them
+        try { new com.pikaronga.parkour.config.ConfigMigrator(this).migrateAll(); } catch (Throwable ignored) {}
         this.configManager = new ConfigManager(this);
         DatabaseManager db = new DatabaseManager(this);
         this.storage = new SqliteParkourStorage(this, db);

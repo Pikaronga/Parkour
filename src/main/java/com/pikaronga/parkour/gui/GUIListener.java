@@ -70,7 +70,7 @@ public class GUIListener implements Listener {
                 }
                 if (raw == sortSlotCfg) {
                     GuiState state = GuiState.fromTitle(title);
-                    String nextSort = switch (state.sort) { case "rate" -> "difficulty"; case "difficulty" -> "name"; default -> "rate"; };
+                    String nextSort = nextSort(state.sort);
                     PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), nextSort, 1);
                     return;
                 }
@@ -93,7 +93,7 @@ public class GUIListener implements Listener {
             }
             if (clicked.getType() == Material.COMPARATOR) {
                 GuiState state = GuiState.fromTitle(title);
-                String nextSort = switch (state.sort) { case "rate" -> "difficulty"; case "difficulty" -> "name"; default -> "rate"; };
+                String nextSort = nextSort(state.sort);
                 PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), nextSort, 1);
                 return;
             }
@@ -132,6 +132,7 @@ public class GUIListener implements Listener {
                     }
                 } catch (Throwable ignored) {}
                 try { player.setWorldBorder(null); } catch (Throwable ignored) {}
+                try { player.setGameMode(org.bukkit.GameMode.ADVENTURE); } catch (Throwable ignored) {}
                 org.bukkit.Location tp = dest.clone();
                 org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> player.teleport(tp));
             }
@@ -156,7 +157,7 @@ public class GUIListener implements Listener {
                     return;
                 }
                 if (raw == browseSlotCfg) {
-                    PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), "rate", 1);
+                    PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), "looks:desc", 1);
                     return;
                 }
                 if (raw == createSlotCfg) {
@@ -177,7 +178,7 @@ public class GUIListener implements Listener {
                 return;
             }
             if (clicked.getType() == Material.COMPASS && ChatColor.stripColor(clicked.getItemMeta().getDisplayName()).equalsIgnoreCase("Browse Published")) {
-                PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), "rate", 1);
+                PublishedParkoursGUI.open(player, plugin, new java.util.ArrayList<>(plugin.getParkourManager().getCourses().values()), "looks:desc", 1);
                 return;
             }
             if (clicked.getType() == Material.EMERALD_BLOCK && ChatColor.stripColor(clicked.getItemMeta().getDisplayName()).equalsIgnoreCase("Create New")) {
@@ -319,7 +320,7 @@ public class GUIListener implements Listener {
         static GuiState fromTitle(String title) {
             // Title format: Player Parkours | sort:<sort> | page:X/Y
             String lower = ChatColor.stripColor(title).toLowerCase();
-            String sort = "rate";
+            String sort = "looks:desc";
             int page = 1;
             int sIdx = lower.indexOf("sort:");
             if (sIdx < 0) {
@@ -340,6 +341,21 @@ public class GUIListener implements Listener {
             }
             return new GuiState(sort, page);
         }
+    }
+
+    private static String nextSort(String current) {
+        String[] cycle = new String[]{
+                "looks:desc", "looks:asc",
+                "difficulty:asc", "difficulty:desc",
+                "name:asc", "name:desc",
+                "created:desc", "created:asc"
+        };
+        String cur = (current == null || current.isBlank()) ? cycle[0] : current.toLowerCase();
+        int idx = 0;
+        for (int i = 0; i < cycle.length; i++) {
+            if (cycle[i].equals(cur) || cycle[i].startsWith(cur + ":") || cur.startsWith(cycle[i] + ":")) { idx = i; break; }
+        }
+        return cycle[(idx + 1) % cycle.length];
     }
 
     private static class MyPlotsState {

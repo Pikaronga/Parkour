@@ -86,3 +86,4 @@ items:
   leave:
     name: "&cLeave Parkour"
     lore: "&7Exit parkour mode"
+config-version: 1

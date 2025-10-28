@@ -507,15 +507,16 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
                     return true;
                 }
-                if (rated.getCreators().contains(player.getUniqueId())) {
-                    player.sendMessage(messageManager.getMessage("rate-own", "&cYou cannot rate your own parkour."));
-                    return true;
-                }
                 try {
                     int looks = Integer.parseInt(args[2]);
                     int diff = Integer.parseInt(args[3]);
-                    rated.setLookRating(player.getUniqueId(), looks);
-                    rated.setDifficultyRating(player.getUniqueId(), diff);
+                    if (rated.getCreators().contains(player.getUniqueId())) {
+                        // Allow creators to rate difficulty only
+                        rated.setDifficultyRating(player.getUniqueId(), diff);
+                    } else {
+                        rated.setLookRating(player.getUniqueId(), looks);
+                        rated.setDifficultyRating(player.getUniqueId(), diff);
+                    }
                     try { plugin.getStorage().saveCourses(parkourManager.getCourses()); } catch (Throwable ignored) {}
                     player.sendMessage(messageManager.getMessage("rate-success", "&aYour rating has been recorded."));
                 } catch (NumberFormatException ex) {

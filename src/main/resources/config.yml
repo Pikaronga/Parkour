@@ -47,3 +47,4 @@ player-parkours:
 collisions:
   disable: true
 debug: false
+config-version: 1

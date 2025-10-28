@@ -39,6 +39,8 @@ public class ParkourCourse {
     private final Map<UUID, Integer> difficultyRatings = new HashMap<>();
     private Integer staffDifficulty; // 1-5 optional
     private int placedBlocks = 0;
+    // Creation order hint (DB row id or timestamp). Used for sorting in GUIs.
+    private int createdOrder = 0;
 
     // Run counters
     private final Map<UUID, Integer> playerRunCounts = new ConcurrentHashMap<>();
@@ -213,6 +215,9 @@ public class ParkourCourse {
     public void setPlacedBlocks(int value) { this.placedBlocks = Math.max(0, value); }
     public void incrementPlacedBlocks() { this.placedBlocks++; }
     public void decrementPlacedBlocks() { if (this.placedBlocks > 0) this.placedBlocks--; }
+
+    public int getCreatedOrder() { return createdOrder; }
+    public void setCreatedOrder(int createdOrder) { this.createdOrder = Math.max(0, createdOrder); }
 
     // ---- Run counts (persistent via storage) ----
     public Map<UUID, Integer> getPlayerRunCounts() { return playerRunCounts; }

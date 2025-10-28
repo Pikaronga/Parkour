@@ -10,11 +10,13 @@ com\pikaronga\parkour\config\MessageManager.class
 com\pikaronga\parkour\util\ParkourManager.class
 com\pikaronga\parkour\hologram\PersonalBestHologram.class
 com\pikaronga\parkour\util\RenameUtil.class
+com\pikaronga\parkour\config\ConfigMigrator.class
 com\pikaronga\parkour\gui\SetupInputListener.class
 com\pikaronga\parkour\gui\GUIListener$GuiState.class
 com\pikaronga\parkour\cache\ParkourCacheManager.class
 com\pikaronga\parkour\gui\ConfirmDeleteGUI.class
 com\pikaronga\parkour\gui\PublishedParkoursGUI.class
+com\pikaronga\parkour\gui\PublishedParkoursGUI$SortSpec.class
 com\pikaronga\parkour\storage\SqliteParkourStorage.class
 com\pikaronga\parkour\course\ParkourCourse.class
 com\pikaronga\parkour\gui\RatingGUI.class

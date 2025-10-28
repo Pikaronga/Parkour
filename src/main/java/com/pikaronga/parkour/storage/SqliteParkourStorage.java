@@ -105,6 +105,7 @@ public class SqliteParkourStorage {
 
                     // Creators, checkpoints, times
                     int id = rs.getInt("id");
+                    try { c.setCreatedOrder(id); } catch (Throwable ignored) {}
                     loadCreators(conn, id, c);
                     loadCheckpoints(conn, id, world, c);
                     loadTimes(conn, id, c);

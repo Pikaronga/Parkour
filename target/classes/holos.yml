@@ -9,3 +9,4 @@ personal-best:
 creators:
   header: "&aCreated by:"
   entry: "&f{name}"
+config-version: 1
