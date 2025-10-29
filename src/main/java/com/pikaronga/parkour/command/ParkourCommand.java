@@ -49,9 +49,20 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         boolean success = true;
         switch (sub) {
             // Admin subcommands
-            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "deletetime", "deletecourse", "renamecourse", "holocleanup" -> {
+            case "setstart", "setend", "setspawn", "setcheckpoint", "setholotop10", "setholobest", "setmaxfall", "deletetime", "deletecourse", "renamecourse", "holocleanup", "listdbcourses" -> {
                 if (!player.hasPermission("parkour.admin")) {
                     player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
+                    return true;
+                }
+                if (sub.equals("listdbcourses")) {
+                    plugin.getStorage().listCourseNamesAsync(names -> {
+                        int count = names != null ? names.size() : 0;
+                        String joined = (names == null || names.isEmpty()) ? "<none>" : String.join(", ", names);
+                        player.sendMessage(messageManager.getMessage(
+                                "db-course-list",
+                                "&aDB courses (&f{count}&a): &f{list}",
+                                java.util.Map.of("count", Integer.toString(count), "list", joined)));
+                    });
                     return true;
                 }
                 if (sub.equals("holocleanup")) {
@@ -293,7 +304,23 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 parkourManager.removeCourse(src.getName());
                 parkourManager.getCourses().put(dst.getName().toLowerCase(), dst);
                 plugin.getHologramManager().createHolograms(dst);
-                plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
+                // Persist new row and times, then migrate counters and delete old row
+                try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
+                try { plugin.getStorage().saveTimesAsync(dst); } catch (Throwable ignored) {}
+                try {
+                    final org.bukkit.entity.Player senderPlayer = player;
+                    plugin.getStorage().migrateCourseRunCountersAsync(current, fresh, ok -> {
+                        plugin.getStorage().deleteCourseByNameAsync(current, delOk -> {
+                            if (delOk != null && delOk) {
+                                senderPlayer.sendMessage(messageManager.getMessage("rename-cleanup-done", "&aFinalized rename in database. Old name cleaned."));
+                                plugin.getLogger().info("[Parkour] Finalized player rename cleanup: '" + current + "' -> '" + fresh + "'.");
+                            } else {
+                                senderPlayer.sendMessage(messageManager.getMessage("rename-cleanup-failed", "&cRename saved, but failed to cleanup old entry. Check logs."));
+                                plugin.getLogger().warning("[Parkour] Failed to delete old course after rename: '" + current + "'");
+                            }
+                        });
+                    });
+                } catch (Throwable ignored) {}
                 plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), dst);
                 player.sendMessage(messageManager.getMessage("rename-success", "&aRenamed &f{old}&a to &f{new}", java.util.Map.of("old", current, "new", fresh)));
             }
@@ -425,10 +452,23 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     parkourManager.removeCourse(oldName);
                     parkourManager.getCourses().put(dst.getName().toLowerCase(), dst);
                     plugin.getHologramManager().createHolograms(dst);
-                    // Persist new course row and data, and cleanup old row in DB
+                    // Persist new course row and data, migrate counters, then cleanup old row in DB
                     try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
                     try { plugin.getStorage().saveTimesAsync(dst); } catch (Throwable ignored) {}
-                    try { plugin.getStorage().deleteCourseByNameAsync(oldName, null); } catch (Throwable ignored) {}
+                    try {
+                        final org.bukkit.entity.Player senderPlayer = player;
+                        plugin.getStorage().migrateCourseRunCountersAsync(oldName, newName, ok -> {
+                            plugin.getStorage().deleteCourseByNameAsync(oldName, delOk -> {
+                                if (delOk != null && delOk) {
+                                    senderPlayer.sendMessage(messageManager.getMessage("rename-cleanup-done", "&aFinalized rename in database. Old name cleaned."));
+                                    plugin.getLogger().info("[Parkour] Finalized publish-rename cleanup: '" + oldName + "' -> '" + newName + "'.");
+                                } else {
+                                    senderPlayer.sendMessage(messageManager.getMessage("rename-cleanup-failed", "&cRename saved, but failed to cleanup old entry. Check logs."));
+                                    plugin.getLogger().warning("[Parkour] Failed to delete old course after publish rename: '" + oldName + "'");
+                                }
+                            });
+                        });
+                    } catch (Throwable ignored) {}
                     c = dst;
                 }
                 if (c.getStartPlate() == null || c.getFinishPlate() == null) {
@@ -479,8 +519,17 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 ParkourCourse rated = parkourManager.getCourse(args[1]);
+                
                 if (rated == null || !rated.isPublished()) {
                     player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
+                    return true;
+                }
+                if (args.length == 2) {
+                    if (rated.getCreators().contains(player.getUniqueId())) {
+                        player.sendMessage(messageManager.getMessage("rate-own", "&cYou cannot rate your own parkour."));
+                        return true;
+                    }
+                    com.pikaronga.parkour.gui.RatingGUI.open(player, plugin, rated);
                     return true;
                 }
                 if (rated.getCreators().contains(player.getUniqueId())) {
@@ -498,15 +547,25 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("no-permission", "&cYou do not have permission to use this command."));
                     return true;
                 }
-                if (args.length < 4) {
+                if (args.length < 2) {
                     player.sendMessage(messageManager.getMessage("rate-usage", "&cUsage: /parkour rate <name> <looks 1-5> <diff 1-5>"));
                     return true;
                 }
                 ParkourCourse rated = parkourManager.getCourse(args[1]);
+                
                 if (rated == null || !rated.isPublished()) {
                     player.sendMessage(messageManager.getMessage("rate-not-found", "&cParkour not found or not published."));
                     return true;
                 }
+                if (args.length == 2) {
+                    if (rated.getCreators().contains(player.getUniqueId())) {
+                        player.sendMessage(messageManager.getMessage("rate-own", "&cYou cannot rate your own parkour."));
+                        return true;
+                    }
+                    com.pikaronga.parkour.gui.RatingGUI.open(player, plugin, rated);
+                    return true;
+                }
+                if (args.length < 4) { player.sendMessage(messageManager.getMessage("rate-usage", "&cUsage: /parkour rate <name> <looks 1-5> <diff 1-5>")); return true; }
                 try {
                     int looks = Integer.parseInt(args[2]);
                     int diff = Integer.parseInt(args[3]);

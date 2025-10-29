@@ -765,6 +765,23 @@ public class SqliteParkourStorage {
         });
     }
 
+    public void listCourseNamesAsync(java.util.function.Consumer<java.util.List<String>> callback) {
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            java.util.List<String> names = new java.util.ArrayList<>();
+            try (java.sql.Connection conn = db.getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement("SELECT name FROM parkours ORDER BY name COLLATE NOCASE");
+                 java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String n = rs.getString(1);
+                    if (n != null && !n.isBlank()) names.add(n);
+                }
+            } catch (java.sql.SQLException e) {
+                plugin.getLogger().warning("Failed to list course names: " + e.getMessage());
+            }
+            if (callback != null) org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> callback.accept(names));
+        });
+    }
+
     public void migrateCourseRunCountersAsync(String oldName, String newName, java.util.function.Consumer<Boolean> callback) {
         if (oldName == null || newName == null || oldName.equalsIgnoreCase(newName)) { if (callback != null) callback.accept(false); return; }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

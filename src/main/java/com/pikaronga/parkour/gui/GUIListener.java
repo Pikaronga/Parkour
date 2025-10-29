@@ -267,11 +267,18 @@ public class GUIListener implements Listener {
             }
         } else if (isConfirmDelete) {
             String raw = ChatColor.stripColor(title);
-            String courseName = raw.replace("Delete", "").replace("?", "").trim();
+            String delPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("confirm-delete", "&cDelete "));
+            String courseName = raw;
+            if (!delPrefix.isEmpty() && raw.startsWith(delPrefix)) {
+                courseName = raw.substring(delPrefix.length());
+            }
+            courseName = courseName.replace("?", "").trim();
             com.pikaronga.parkour.course.ParkourCourse course = plugin.getParkourManager().getCourse(courseName);
             if (course == null) { player.closeInventory(); return; }
-            int yesSlot = plugin.getGuiConfig().slot("confirm-delete", "yes", 11);
-            int noSlot = plugin.getGuiConfig().slot("confirm-delete", "no", 15);
+            int yesSlot = plugin.getGuiConfig().slot("confirm-delete", "yes", -1);
+            if (yesSlot < 0) yesSlot = plugin.getGuiConfig().slot("confirm-delete", "true", 12);
+            int noSlot = plugin.getGuiConfig().slot("confirm-delete", "no", -1);
+            if (noSlot < 0) noSlot = plugin.getGuiConfig().slot("confirm-delete", "false", 16);
             int rawSlot = event.getRawSlot();
             if (rawSlot == yesSlot) {
                 // owner or admin
@@ -282,11 +289,24 @@ public class GUIListener implements Listener {
                     return;
                 }
                 plugin.getHologramManager().removeCourseHolograms(course);
-                plugin.getPlayerParkourManager().freePlotForCourse(course);
-                plugin.getParkourManager().removeCourse(course.getName());
-                plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses());
-                player.closeInventory();
-                player.sendMessage(plugin.getMessageManager().getMessage("delete-success", "&aDeleted parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+                // Move player out and restore modes/inventory before clearing
+                try { plugin.getPlayerParkourManager().handleExitPlot(player); } catch (Throwable ignored) {}
+                try {
+                    org.bukkit.Location spawn = (org.bukkit.Bukkit.getWorlds().isEmpty())
+                            ? player.getWorld().getSpawnLocation()
+                            : org.bukkit.Bukkit.getWorlds().get(0).getSpawnLocation();
+                    if (spawn != null) player.teleport(spawn);
+                } catch (Throwable ignored) {}
+                player.sendMessage(plugin.getMessageManager().getMessage("delete-progress", "&eResetting plot for &f{course}&e...", java.util.Map.of("course", course.getName())));
+                plugin.getPlayerParkourManager().resetPlotForCourseBatched(course, 512, () -> {
+                    plugin.getParkourManager().removeCourse(course.getName());
+                    try { plugin.getStorage().deleteCourseByNameAsync(course.getName(), null); } catch (Throwable ignored) {}
+                    try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
+                    org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
+                        player.closeInventory();
+                        player.sendMessage(plugin.getMessageManager().getMessage("delete-success", "&aDeleted parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+                    });
+                });
             } else if (rawSlot == noSlot) {
                 player.closeInventory();
                 player.sendMessage(plugin.getMessageManager().getMessage("delete-cancel", "&eCancelled deletion."));

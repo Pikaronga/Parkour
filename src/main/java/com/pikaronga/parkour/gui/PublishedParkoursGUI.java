@@ -76,12 +76,7 @@ public class PublishedParkoursGUI {
 
     private static String formatDifficulty(ParkourCourse c) {
         double avg = c.getAverageDifficultyRating();
-        String player = (avg <= 0.0) ? "N/A" : String.format("%.1f", avg);
-        Integer staff = c.getStaffDifficulty();
-        if (staff != null) {
-            return player + " (Staff: " + staff + ")";
-        }
-        return player;
+        return (avg <= 0.0) ? "N/A" : String.format("%.1f/5", avg);
     }
 
     public static Inventory build(ParkourPlugin plugin, List<ParkourCourse> courses, SortSpec spec, int page) {
@@ -111,14 +106,17 @@ public class PublishedParkoursGUI {
                     }
                     creators = cs.toString();
                 }
-                String staff = c.getStaffDifficulty() != null ? Integer.toString(c.getStaffDifficulty()) : null;
+                String staffStr = c.getStaffDifficulty() != null ? (Integer.toString(c.getStaffDifficulty()) + "/5") : "N/A";
+                double looksAvg = c.getAverageLookRating();
+                String looksStr = looksAvg <= 0.0 ? "N/A" : String.format("%.1f/5", looksAvg);
                 meta.setDisplayName(plugin.getGuiConfig().itemName("published", "&6{course}", java.util.Map.of("course", c.getName())));
                 String difficultyStr = formatDifficulty(c);
                 List<String> lore = plugin.getGuiConfig().itemLore("published", java.util.List.of("&7Looks: &e{looks}", "&7Difficulty: &e{difficulty}", "&7By: &b{creators}"), java.util.Map.of(
                         "course", c.getName(),
-                        "looks", String.format("%.1f", c.getAverageLookRating()),
+                        "looks", looksStr,
                         "difficulty", difficultyStr,
-                        "creators", creators
+                        "creators", creators,
+                        "staffDiff", staffStr
                 ));
                 meta.setLore(lore);
                 try {
@@ -153,3 +151,6 @@ public class PublishedParkoursGUI {
         return it;
     }
 }
+
+
+

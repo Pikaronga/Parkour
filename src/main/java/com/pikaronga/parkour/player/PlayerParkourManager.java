@@ -320,8 +320,138 @@ public class PlayerParkourManager {
         }
     }
 
+    /**
+     * Reset/remove all player-placed blocks inside the plot region of a course and free the plot.
+     * - In void worlds: clears a vertical slice around the platform Y and rebuilds the platform.
+     * - In normal worlds: clears blocks above natural terrain top surface and redraws outline if enabled.
+     */
+    public void resetPlotForCourse(com.pikaronga.parkour.course.ParkourCourse course) {
+        if (course == null) return;
+        PlotRegion region = course.getPlotRegion();
+        World w = getWorld();
+        if (region == null || w == null) { freePlotForCourse(course); return; }
+
+        int minX = region.minX();
+        int minZ = region.minZ();
+        int maxX = region.maxX();
+        int maxZ = region.maxZ();
+
+        boolean voidWorld = config.isVoidWorld();
+        int platformY = config.getPlatformY();
+        int maxY = Math.max(1, w.getMaxHeight() - 1);
+
+        // Clear blocks inside the region
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (voidWorld) {
+                    int clearFrom = Math.max(0, platformY - 1); // keep platform one below
+                    int clearTo = Math.min(maxY, platformY + 128); // generous slice above platform
+                    for (int y = clearFrom; y <= clearTo; y++) {
+                        org.bukkit.block.Block b = w.getBlockAt(x, y, z);
+                        // Rebuild platform below after clear loop
+                        b.setType(org.bukkit.Material.AIR, false);
+                    }
+                } else {
+                    int groundY = w.getHighestBlockYAt(x, z);
+                    int clearFrom = Math.min(maxY, groundY + 1);
+                    for (int y = clearFrom; y <= Math.min(maxY, groundY + 128); y++) {
+                        org.bukkit.block.Block b = w.getBlockAt(x, y, z);
+                        b.setType(org.bukkit.Material.AIR, false);
+                    }
+                }
+            }
+        }
+
+        // Rebuild base features
+        if (voidWorld) {
+            // Rebuild the platform at platformY - 1
+            Location centerBelow = new Location(w,
+                    minX + region.size() / 2.0,
+                    platformY,
+                    minZ + region.size() / 2.0);
+            buildPlatform(centerBelow, config.getPlatformSize(), config.getPlatformBlock());
+        } else if (config.outlineEnabled()) {
+            drawPlotOutline(region);
+        }
+
+        // Finally mark plot as free for new allocations
+        freePlotForCourse(course);
+    }
+
+    /**
+     * Reset the plot in small batches over multiple ticks to reduce lag.
+     * Processes up to {@code columnsPerTick} (x,z) columns per tick.
+     * Calls {@code after} on the main thread when done.
+     */
+    public void resetPlotForCourseBatched(com.pikaronga.parkour.course.ParkourCourse course, int columnsPerTick, Runnable after) {
+        if (course == null) { if (after != null) org.bukkit.Bukkit.getScheduler().runTask(plugin, after); return; }
+        PlotRegion region = course.getPlotRegion();
+        World w = getWorld();
+        if (region == null || w == null) { freePlotForCourse(course); if (after != null) org.bukkit.Bukkit.getScheduler().runTask(plugin, after); return; }
+
+        final int minX = region.minX();
+        final int minZ = region.minZ();
+        final int maxX = region.maxX();
+        final int maxZ = region.maxZ();
+        final boolean voidWorld = config.isVoidWorld();
+        final int platformY = config.getPlatformY();
+        final int maxY = Math.max(1, w.getMaxHeight() - 1);
+        final int cps = Math.max(1, columnsPerTick);
+
+        // Flatten iteration over (x,z) columns
+        final int totalX = (maxX - minX + 1);
+        final int totalZ = (maxZ - minZ + 1);
+        final int totalColumns = totalX * totalZ;
+        final int[] idx = new int[]{0};
+
+        final org.bukkit.scheduler.BukkitTask[] taskRef = new org.bukkit.scheduler.BukkitTask[1];
+        taskRef[0] = org.bukkit.Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            int processed = 0;
+            while (processed < cps && idx[0] < totalColumns) {
+                int k = idx[0]++;
+                int lx = k / totalZ; // 0..totalX-1
+                int lz = k % totalZ; // 0..totalZ-1
+                int x = minX + lx;
+                int z = minZ + lz;
+
+                if (voidWorld) {
+                    int clearFrom = Math.max(0, platformY - 1);
+                    int clearTo = Math.min(maxY, platformY + 128);
+                    for (int y = clearFrom; y <= clearTo; y++) {
+                        org.bukkit.block.Block b = w.getBlockAt(x, y, z);
+                        b.setType(org.bukkit.Material.AIR, false);
+                    }
+                } else {
+                    int groundY = w.getHighestBlockYAt(x, z);
+                    int clearFrom = Math.min(maxY, groundY + 1);
+                    for (int y = clearFrom; y <= Math.min(maxY, groundY + 128); y++) {
+                        org.bukkit.block.Block b = w.getBlockAt(x, y, z);
+                        b.setType(org.bukkit.Material.AIR, false);
+                    }
+                }
+                processed++;
+            }
+
+            if (idx[0] >= totalColumns) {
+                // Done clearing: rebuild base, free plot, finish
+                if (voidWorld) {
+                    Location centerBelow = new Location(w,
+                            minX + region.size() / 2.0,
+                            platformY,
+                            minZ + region.size() / 2.0);
+                    buildPlatform(centerBelow, config.getPlatformSize(), config.getPlatformBlock());
+                } else if (config.outlineEnabled()) {
+                    drawPlotOutline(region);
+                }
+                freePlotForCourse(course);
+                try { if (taskRef[0] != null) taskRef[0].cancel(); } catch (Throwable ignored) {}
+                if (after != null) org.bukkit.Bukkit.getScheduler().runTask(plugin, after);
+            }
+        }, 1L, 1L);
+    }
+
     public void handleEnterPlot(Player player) {
-        if (!config.giveCreativeInPlots()) return;
+        // Always ensure Creative when entering player's plot
         // Save inventory state once per entry
         if (!savedContents.containsKey(player.getUniqueId())) {
             try {
