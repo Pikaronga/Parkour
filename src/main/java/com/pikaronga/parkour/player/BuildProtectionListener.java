@@ -13,10 +13,14 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public class BuildProtectionListener implements Listener {
     private final PlayerParkourManager ppm;
+    private final Map<UUID, Long> publishWarn = new HashMap<>();
 
     public BuildProtectionListener(PlayerParkourManager ppm) {
         this.ppm = ppm;
@@ -24,15 +28,33 @@ public class BuildProtectionListener implements Listener {
 
     private boolean canBuild(Player player, Location location) {
         Optional<ParkourCourse> course = ppm.getCourseByLocation(location);
-        return course.filter(parkourCourse -> ppm.isOwner(player, parkourCourse)).isPresent();
+        return course.filter(parkourCourse -> ppm.canEdit(player, parkourCourse)).isPresent();
+    }
+
+    private void warnPublishedLocked(Player player) {
+        if (player == null) return;
+        UUID id = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Long last = publishWarn.get(id);
+        if (last != null && now - last < 2000L) return;
+        publishWarn.put(id, now);
+        try {
+            player.sendMessage(ppm.getPlugin().getMessageManager().getMessage(
+                    "publish-locked",
+                    "&cThis parkour is published and cannot be edited."
+            ));
+        } catch (Throwable ignored) {}
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         if (event.getBlockPlaced().getWorld().equals(ppm.getWorld())) {
             Optional<ParkourCourse> in = ppm.getCourseByLocation(event.getBlockPlaced().getLocation());
-            if (in.isEmpty() || !ppm.isOwner(event.getPlayer(), in.get())) {
+            if (in.isEmpty() || !ppm.canEdit(event.getPlayer(), in.get())) {
                 event.setCancelled(true);
+                if (in.isPresent() && in.get().isPublished() && ppm.isOwner(event.getPlayer(), in.get())) {
+                    warnPublishedLocked(event.getPlayer());
+                }
                 return;
             }
             in.get().incrementPlacedBlocks();
@@ -43,8 +65,11 @@ public class BuildProtectionListener implements Listener {
     public void onBreak(BlockBreakEvent event) {
         if (event.getBlock().getWorld().equals(ppm.getWorld())) {
             Optional<ParkourCourse> in = ppm.getCourseByLocation(event.getBlock().getLocation());
-            if (in.isEmpty() || !ppm.isOwner(event.getPlayer(), in.get())) {
+            if (in.isEmpty() || !ppm.canEdit(event.getPlayer(), in.get())) {
                 event.setCancelled(true);
+                if (in.isPresent() && in.get().isPublished() && ppm.isOwner(event.getPlayer(), in.get())) {
+                    warnPublishedLocked(event.getPlayer());
+                }
                 return;
             }
             in.get().decrementPlacedBlocks();
@@ -110,10 +135,14 @@ public class BuildProtectionListener implements Listener {
             player.sendMessage(org.bukkit.ChatColor.RED + "WorldEdit is only allowed inside player-parkour plots.");
             return;
         }
-        java.util.Optional<com.pikaronga.parkour.course.ParkourCourse> in = ppm.getCourseByLocation(player.getLocation());
-        if (in.isEmpty() || !ppm.isOwner(player, in.get())) {
+        Optional<com.pikaronga.parkour.course.ParkourCourse> in = ppm.getCourseByLocation(player.getLocation());
+        if (in.isEmpty() || !ppm.canEdit(player, in.get())) {
             event.setCancelled(true);
-            player.sendMessage(org.bukkit.ChatColor.RED + "WorldEdit is only allowed inside your own plot.");
+            if (in.isPresent() && in.get().isPublished() && ppm.isOwner(player, in.get())) {
+                warnPublishedLocked(player);
+            } else {
+                player.sendMessage(org.bukkit.ChatColor.RED + "WorldEdit is only allowed inside your own plot.");
+            }
             return;
         }
         java.util.List<String> deny = ppm.getPlugin().getConfigManager().weDenyList();

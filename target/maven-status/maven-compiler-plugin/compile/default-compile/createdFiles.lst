@@ -34,6 +34,7 @@ com\pikaronga\parkour\session\SessionManager.class
 com\pikaronga\parkour\gui\PluginGuiHolder.class
 com\pikaronga\parkour\hologram\HologramManager.class
 com\pikaronga\parkour\placeholder\ParkourPlaceholders.class
+com\pikaronga\parkour\gui\PublishConfirmGUI.class
 com\pikaronga\parkour\hologram\CreatorHologram.class
 com\pikaronga\parkour\hologram\Hologram.class
 com\pikaronga\parkour\ParkourPlugin.class

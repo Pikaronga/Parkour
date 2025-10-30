@@ -27,9 +27,10 @@ public class GUIListener implements Listener {
         boolean isPublishedGui = title.startsWith(PublishedParkoursGUI.TITLE_PREFIX);
         boolean isMyPlotsGui = title.startsWith(MyPlotsGUI.TITLE_PREFIX);
         boolean isSetupGui = title.startsWith(SetupGUI.TITLE_PREFIX);
+        boolean isPublishConfirm = false;
         boolean isConfirmDelete = ChatColor.stripColor(title).toLowerCase().startsWith(ChatColor.stripColor(plugin.getGuiConfig().title("confirm-delete", "&cDelete", java.util.Map.of())).toLowerCase().replace("Â§", ""));
         if (oursHolder0) { event.setCancelled(true); if (plugin.getConfigManager().debugEnabled()) plugin.getLogger().info("GUI detected via holder; cancelling to protect."); }
-        if (!oursHolder0 && !isPublishedGui && !isMyPlotsGui && !isSetupGui && !isConfirmDelete && !title.equals(AdminParkoursGUI.TITLE)) return;
+        if (!oursHolder0 && !isPublishedGui && !isMyPlotsGui && !isSetupGui && !isPublishConfirm && !isConfirmDelete && !title.equals(AdminParkoursGUI.TITLE)) return;
         event.setCancelled(true);
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getItemMeta() == null || clicked.getItemMeta().getDisplayName() == null) return;
@@ -41,6 +42,7 @@ public class GUIListener implements Listener {
             isMyPlotsGui = "my-plots".equals(id);
             // Accept either plain "setup" or the per-course variant "setup:<course>"
             isSetupGui = "setup".equals(id) || (id != null && id.startsWith("setup:"));
+            isPublishConfirm = "publish-confirm".equals(id) || (id != null && id.startsWith("publish-confirm:"));
             isConfirmDelete = "confirm-delete".equals(id);
         }
         if (isPublishedGui) {
@@ -196,6 +198,9 @@ public class GUIListener implements Listener {
             plugin.getPlayerParkourManager().teleportToPlot(player, course);
             player.closeInventory();
             player.sendMessage(plugin.getMessageManager().getMessage("edit-teleport", "&aTeleported to parkour &f{course}&a.", java.util.Map.of("course", course.getName())));
+            if (course.isPublished()) {
+                player.sendMessage(plugin.getMessageManager().getMessage("publish-locked", "&cThis parkour is already published and cannot be edited."));
+            }
         } else if (isSetupGui) {
             String courseName = null;
             if (oursHolder0) {
@@ -243,9 +248,34 @@ public class GUIListener implements Listener {
             int rename = plugin.getGuiConfig().slot("setup", "buttons.rename", -1);
             int maxfall = plugin.getGuiConfig().slot("setup", "buttons.set-maxfall", -1);
             int tp = plugin.getGuiConfig().slot("setup", "buttons.teleport", -1);
+            int toggleTest = plugin.getGuiConfig().slot("setup", "buttons.toggle-test", -1);
             int publish = plugin.getGuiConfig().slot("setup", "buttons.publish", -1);
             int delete = plugin.getGuiConfig().slot("setup", "buttons.delete", -1);
             int close = plugin.getGuiConfig().slot("setup", "buttons.close", -1);
+
+            if (raw == tp) {
+                plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), course);
+                plugin.getPlayerParkourManager().teleportToPlot(player, course);
+                return;
+            }
+            if (raw == delete) {
+                com.pikaronga.parkour.gui.ConfirmDeleteGUI.open(player, plugin, course);
+                return;
+            }
+            if (raw == close) {
+                player.closeInventory();
+                return;
+            }
+
+            boolean locked = course.isPublished();
+            if (locked) {
+                if (raw == publish) {
+                    player.sendMessage(plugin.getMessageManager().getMessage("publish-locked", "&cThis parkour is already published and locked for editing."));
+                } else {
+                    player.sendMessage(plugin.getMessageManager().getMessage("publish-locked", "&cPublished parkours can no longer be edited."));
+                }
+                return;
+            }
 
             boolean refresh = false;
             if (raw == ss || raw == ssd) { player.performCommand("parkour psetstart " + course.getName()); refresh = true; }
@@ -257,13 +287,49 @@ public class GUIListener implements Listener {
             else if (raw == creator || raw == creatord) { player.performCommand("parkour psetcreatorholo " + course.getName()); refresh = true; }
             else if (raw == rename) { com.pikaronga.parkour.gui.SetupInputListener.requestRename(plugin, player, course); player.closeInventory(); return; }
             else if (raw == maxfall) { com.pikaronga.parkour.gui.SetupInputListener.requestMaxFall(plugin, player, course); player.closeInventory(); return; }
-            else if (raw == tp) { plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), course); plugin.getPlayerParkourManager().teleportToPlot(player, course); return; }
-            else if (raw == publish) { player.performCommand("parkour publish " + course.getName()); }
-            else if (raw == delete) { com.pikaronga.parkour.gui.ConfirmDeleteGUI.open(player, plugin, course); }
-            else if (raw == close) { player.closeInventory(); return; }
+            else if (raw == toggleTest) { player.performCommand("parkour test " + course.getName()); return; }
+            else if (raw == publish) { com.pikaronga.parkour.gui.PublishConfirmGUI.open(player, plugin, course); return; }
+            else { return; }
 
             if (refresh) {
                 org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> com.pikaronga.parkour.gui.SetupGUI.open(player, plugin, course));
+            }
+        } else if (isPublishConfirm) {
+            String courseName = null;
+            if (oursHolder0) {
+                try {
+                    PluginGuiHolder holder = (PluginGuiHolder) event.getView().getTopInventory().getHolder();
+                    if (holder != null) {
+                        String id = holder.getId();
+                        if (id != null && id.startsWith("publish-confirm:")) {
+                            courseName = id.substring("publish-confirm:".length());
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+            if (courseName == null || courseName.isBlank()) {
+                String stripped = ChatColor.stripColor(title);
+                String prefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("publish-confirm", "&6Publish "));
+                if (!prefix.isEmpty() && stripped.startsWith(prefix)) {
+                    courseName = stripped.substring(prefix.length()).replace("?", "").trim();
+                } else {
+                    courseName = stripped.replace("?", "").trim();
+                }
+            }
+            ParkourCourse course = plugin.getParkourManager().getCourse(courseName);
+            if (course == null) { player.closeInventory(); return; }
+            int confirmSlot = plugin.getGuiConfig().slot("publish-confirm", "confirm", 11);
+            int cancelSlot = plugin.getGuiConfig().slot("publish-confirm", "cancel", 15);
+            int raw = event.getRawSlot();
+            if (raw == confirmSlot) {
+                player.closeInventory();
+                player.performCommand("parkour publish " + course.getName());
+                return;
+            }
+            if (raw == cancelSlot) {
+                player.closeInventory();
+                org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> com.pikaronga.parkour.gui.SetupGUI.open(player, plugin, course));
+                return;
             }
         } else if (isConfirmDelete) {
             String raw = ChatColor.stripColor(title);
@@ -320,16 +386,18 @@ public class GUIListener implements Listener {
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
         String title = event.getView().getTitle();
-        String tStripped = ChatColor.stripColor(title).replace("Ã‚Â§", "");
-        String pubPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("published", "&3Player Parkours")).replace("Ã‚Â§", "");
-        String plotsPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("my-plots", "&2My Parkours")).replace("Ã‚Â§", "");
-        String setupPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("setup", "&3Setup: ")).replace("Ã‚Â§", "");
-        String delPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("confirm-delete", "&cDelete ")).replace("Ã‚Â§", "");
+        String tStripped = ChatColor.stripColor(title).replace("a??s?'??", "");
+        String pubPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("published", "&3Player Parkours")).replace("a??s?'??", "");
+        String plotsPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("my-plots", "&2My Parkours")).replace("a??s?'??", "");
+        String setupPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("setup", "&3Setup: " )).replace("a??s?'??", "");
+        String publishPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("publish-confirm", "&6Publish " )).replace("a??s?'??", "");
+        String delPrefix = ChatColor.stripColor(plugin.getGuiConfig().titlePrefix("confirm-delete", "&cDelete " )).replace("a??s?'??", "");
         boolean isPublishedGui = tStripped.toLowerCase().startsWith(pubPrefix.toLowerCase());
         boolean isMyPlotsGui = tStripped.toLowerCase().startsWith(plotsPrefix.toLowerCase());
         boolean isSetupGui = tStripped.toLowerCase().startsWith(setupPrefix.toLowerCase());
+        boolean isPublishConfirm = tStripped.toLowerCase().startsWith(publishPrefix.toLowerCase());
         boolean isConfirmDelete = tStripped.toLowerCase().startsWith(delPrefix.toLowerCase());
-        if (!isPublishedGui && !isMyPlotsGui && !isSetupGui && !isConfirmDelete && !title.equals(AdminParkoursGUI.TITLE)) return;
+        if (!isPublishedGui && !isMyPlotsGui && !isSetupGui && !isPublishConfirm && !isConfirmDelete && !title.equals(AdminParkoursGUI.TITLE)) return;
         event.setCancelled(true);
     }
 
@@ -338,28 +406,119 @@ public class GUIListener implements Listener {
         final int page;
         private GuiState(String sort, int page) { this.sort = sort; this.page = page; }
         static GuiState fromTitle(String title) {
-            // Title format: Player Parkours | sort:<sort> | page:X/Y
-            String lower = ChatColor.stripColor(title).toLowerCase();
+            String stripped = ChatColor.stripColor(title);
+            String lower = stripped.toLowerCase();
+            String sort = extractSort(stripped, lower);
+            int page = extractPage(stripped, lower);
+            return new GuiState(sort, page);
+        }
+
+        private static String extractSort(String original, String lower) {
             String sort = "looks:desc";
-            int page = 1;
             int sIdx = lower.indexOf("sort:");
-            if (sIdx < 0) {
-                sIdx = lower.indexOf("sort by:");
-            }
+            if (sIdx < 0) sIdx = lower.indexOf("sort by:");
             if (sIdx >= 0) {
                 int end = lower.indexOf("|", sIdx);
                 int valueStart = lower.startsWith("sort by:", sIdx) ? (sIdx + 8) : (sIdx + 5);
                 String part = end > sIdx ? lower.substring(valueStart, end).trim() : lower.substring(valueStart).trim();
-                sort = part;
+                return canonicalSort(part);
             }
+            String[] segments = original.split("\\|");
+            for (String segment : segments) {
+                if (segment == null) continue;
+                String cleaned = ChatColor.stripColor(segment).trim();
+                if (cleaned.isEmpty()) continue;
+                String lowered = cleaned.toLowerCase();
+                if (lowered.startsWith("sort by")) {
+                    return canonicalSort(lowered.substring(7).trim());
+                }
+                if (lowered.startsWith("sort")) {
+                    int colon = lowered.indexOf(':');
+                    if (colon >= 0 && colon + 1 < lowered.length()) {
+                        return canonicalSort(lowered.substring(colon + 1).trim());
+                    }
+                }
+                if (lowered.contains(":")) {
+                    return canonicalSort(lowered);
+                }
+            }
+            return sort;
+        }
+
+        private static int extractPage(String original, String lower) {
+            int page = 1;
             int pIdx = lower.indexOf("page:");
             if (pIdx >= 0) {
                 String part = lower.substring(pIdx + 5).trim();
                 int slash = part.indexOf("/");
                 if (slash > 0) part = part.substring(0, slash);
                 try { page = Integer.parseInt(part); } catch (NumberFormatException ignored) {}
+            } else {
+                String[] segments = original.split("\\|");
+                for (String segment : segments) {
+                    if (segment == null) continue;
+                    String cleaned = ChatColor.stripColor(segment).trim();
+                    if (cleaned.isEmpty()) continue;
+                    int slash = cleaned.indexOf('/');
+                    if (slash > 0) {
+                        String pagePart = cleaned.substring(0, slash).replaceAll("[^0-9]", "");
+                        if (!pagePart.isEmpty()) {
+                            try { page = Integer.parseInt(pagePart); } catch (NumberFormatException ignored) {}
+                            if (page > 0) break;
+                        }
+                    }
+                }
             }
-            return new GuiState(sort, page);
+            return Math.max(1, page);
+        }
+
+        private static String canonicalSort(String candidate) {
+            if (candidate == null || candidate.isBlank()) return "looks:desc";
+            String cleaned = candidate.trim().toLowerCase();
+            if (cleaned.startsWith("sort by")) {
+                cleaned = cleaned.substring(7).trim();
+            } else if (cleaned.startsWith("sort")) {
+                cleaned = cleaned.substring(4).trim();
+            }
+            boolean asc = cleaned.contains("asc");
+            if (cleaned.contains("desc")) {
+                asc = false;
+            }
+            if (cleaned.contains("a->z") || cleaned.contains("worst") || cleaned.contains("easy") || cleaned.contains("oldest")) {
+                // Interpret human-friendly arrows/words
+                if (cleaned.contains("worst") || cleaned.contains("easy") || cleaned.contains("oldest")) asc = true;
+                if (cleaned.contains("best") || cleaned.contains("hard") || cleaned.contains("newest")) asc = false;
+            }
+            String key = cleaned;
+            int colon = cleaned.indexOf(':');
+            if (colon >= 0) {
+                key = cleaned.substring(0, colon).trim();
+                String dir = cleaned.substring(colon + 1).trim();
+                if (dir.startsWith("asc") || dir.startsWith("a")) asc = true;
+                if (dir.startsWith("desc") || dir.startsWith("d")) asc = false;
+            } else {
+                String[] parts = cleaned.split("\\s+");
+                if (parts.length >= 2) {
+                    key = parts[0];
+                    String dir = parts[1];
+                    if (dir.startsWith("asc") || dir.startsWith("a")) asc = true;
+                    if (dir.startsWith("desc") || dir.startsWith("d")) asc = false;
+                }
+            }
+            key = switch (key) {
+                case "rate", "looks", "look" -> "looks";
+                case "difficulty", "diff" -> "difficulty";
+                case "name", "title" -> "name";
+                case "created", "date", "newest", "oldest" -> "created";
+                default -> {
+                    if (key.contains("look")) yield "looks";
+                    if (key.contains("diff")) yield "difficulty";
+                    if (key.contains("name")) yield "name";
+                    if (key.contains("create") || key.contains("new") || key.contains("old")) yield "created";
+                    yield "looks";
+                }
+            };
+            return key + ":" + (asc ? "asc" : "desc");
         }
     }
 

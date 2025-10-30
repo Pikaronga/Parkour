@@ -43,7 +43,7 @@ public class MyPlotsGUI {
             ItemStack item = new ItemStack(plugin.getGuiConfig().itemMaterial("my-plots", Material.GRASS_BLOCK));
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                String published = c.isPublished() ? ChatColor.GREEN + "Published" : ChatColor.RED + "Unpublished";
+                String published = c.isPublished() ? ChatColor.GREEN + "Published (Locked)" : ChatColor.RED + "Unpublished";
                 int minX = c.getPlotRegion() != null ? c.getPlotRegion().minX() : 0;
                 int minZ = c.getPlotRegion() != null ? c.getPlotRegion().minZ() : 0;
                 int size = c.getPlotRegion() != null ? c.getPlotRegion().size() : 0;

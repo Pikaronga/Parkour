@@ -250,7 +250,19 @@ public class PlayerParkourManager {
     }
 
     public boolean isOwner(Player player, ParkourCourse course) {
-        return player != null && course != null && course.getCreators().contains(player.getUniqueId());
+        return player != null && isOwner(player.getUniqueId(), course);
+    }
+
+    public boolean isOwner(UUID uuid, ParkourCourse course) {
+        return uuid != null && course != null && course.getCreators().contains(uuid);
+    }
+
+    public boolean canEdit(Player player, ParkourCourse course) {
+        return player != null && canEdit(player.getUniqueId(), course);
+    }
+
+    public boolean canEdit(UUID uuid, ParkourCourse course) {
+        return uuid != null && course != null && course.getCreators().contains(uuid) && !course.isPublished();
     }
 
     public ParkourCourse createPlayerCourse(Player player, String name) {
@@ -451,25 +463,31 @@ public class PlayerParkourManager {
     }
 
     public void handleEnterPlot(Player player) {
-        // Always ensure Creative when entering player's plot
-        // Save inventory state once per entry
-        if (!savedContents.containsKey(player.getUniqueId())) {
+        if (player == null) return;
+        ParkourCourse course = getCourseByLocation(player.getLocation()).orElse(null);
+        if (config.useWorldBorder() && course != null && course.getPlotRegion() != null) {
+            applyPlayerBorder(player, course.getPlotRegion());
+        }
+        if (!canEdit(player, course)) {
+            UUID id = player.getUniqueId();
+            GameMode prev = lastGamemode.remove(id);
+            if (prev != null && player.getGameMode() != prev) {
+                try { player.setGameMode(prev); } catch (Throwable ignored) {}
+            }
+            return;
+        }
+        UUID id = player.getUniqueId();
+        if (!savedContents.containsKey(id)) {
             try {
                 org.bukkit.inventory.PlayerInventory inv = player.getInventory();
-                savedContents.put(player.getUniqueId(), inv.getContents());
-                savedArmor.put(player.getUniqueId(), inv.getArmorContents());
-                savedExtra.put(player.getUniqueId(), inv.getExtraContents());
-                savedOffhand.put(player.getUniqueId(), inv.getItemInOffHand());
+                savedContents.put(id, inv.getContents());
+                savedArmor.put(id, inv.getArmorContents());
+                savedExtra.put(id, inv.getExtraContents());
+                savedOffhand.put(id, inv.getItemInOffHand());
             } catch (Throwable ignored) {}
         }
-        lastGamemode.putIfAbsent(player.getUniqueId(), player.getGameMode());
-        player.setGameMode(GameMode.CREATIVE);
-        if (config.useWorldBorder()) {
-            com.pikaronga.parkour.course.ParkourCourse c = getCourseByLocation(player.getLocation()).orElse(null);
-            if (c != null && c.getPlotRegion() != null) {
-                applyPlayerBorder(player, c.getPlotRegion());
-            }
-        }
+        lastGamemode.putIfAbsent(id, player.getGameMode());
+        forceCreativeMode(player, course);
     }
 
     public void handleExitPlot(Player player) {
@@ -494,6 +512,27 @@ public class PlayerParkourManager {
         } catch (Throwable ignored) {}
         if (config.useWorldBorder()) {
             player.setWorldBorder(null);
+        }
+    }
+
+    public void handleCoursePublished(ParkourCourse course) {
+        if (course == null) return;
+        // Stop tracking testing state for this course
+        testingCourses.entrySet().removeIf(e -> course.getName().equalsIgnoreCase(e.getValue()));
+        PlotRegion region = course.getPlotRegion();
+        World world = getWorld();
+        if (world == null || region == null) return;
+        for (Player online : world.getPlayers()) {
+            if (!isOwner(online, course)) continue;
+            if (!region.contains(online.getLocation())) continue;
+            handleExitPlot(online);
+            try { online.setGameMode(GameMode.ADVENTURE); } catch (Throwable ignored) {}
+            try {
+                online.sendMessage(plugin.getMessageManager().getMessage(
+                        "publish-locked",
+                        "&cThis parkour is now published. Editing has been disabled."
+                ));
+            } catch (Throwable ignored) {}
         }
     }
 
@@ -561,5 +600,26 @@ public class PlayerParkourManager {
         wb.setDamageBuffer(0);
         wb.setWarningDistance(1);
         player.setWorldBorder(wb);
+    }
+
+    private void forceCreativeMode(Player player, ParkourCourse expectedCourse) {
+        applyCreative(player, expectedCourse);
+        scheduleCreativeReapply(player, expectedCourse, 1L);
+        scheduleCreativeReapply(player, expectedCourse, 20L);
+    }
+
+    private void scheduleCreativeReapply(Player player, ParkourCourse expectedCourse, long delayTicks) {
+        try {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> applyCreative(player, expectedCourse), delayTicks);
+        } catch (Throwable ignored) {}
+    }
+
+    private void applyCreative(Player player, ParkourCourse expectedCourse) {
+        if (player == null || !player.isOnline()) return;
+        ParkourCourse current = getCourseByLocation(player.getLocation()).orElse(null);
+        if (current == null) return;
+        if (expectedCourse != null && !current.getName().equalsIgnoreCase(expectedCourse.getName())) return;
+        if (!canEdit(player, current)) return;
+        try { player.setGameMode(GameMode.CREATIVE); } catch (Throwable ignored) {}
     }
 }

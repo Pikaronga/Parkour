@@ -63,10 +63,15 @@ public class SetupGUI {
         set(plugin, inv, "setup", "buttons.rename");
         setMaxFallAdjust(plugin, inv, course);
         set(plugin, inv, "setup", "buttons.teleport");
-        set(plugin, inv, "setup", "buttons.publish");
+        if (course.isPublished()) {
+            set(plugin, inv, "setup", "buttons.publish-locked");
+        } else {
+            set(plugin, inv, "setup", "buttons.publish");
+        }
+        set(plugin, inv, "setup", "buttons.toggle-test");
         // Ready status
         boolean ready = course.getStartPlate() != null && course.getFinishPlate() != null && course.getTopHologramLocation() != null;
-        setStatus(plugin, inv, ready);
+        setStatus(plugin, inv, ready, course.isPublished());
         set(plugin, inv, "setup", "buttons.delete");
         set(plugin, inv, "setup", "buttons.close");
         return inv;
@@ -148,10 +153,17 @@ public class SetupGUI {
         }
     }
 
-    private static void setStatus(ParkourPlugin plugin, Inventory inv, boolean ready) {
+    private static void setStatus(ParkourPlugin plugin, Inventory inv, boolean ready, boolean published) {
         int slot = plugin.getGuiConfig().slot("setup", "buttons.status", 4);
-        org.bukkit.Material mat = ready ? org.bukkit.Material.LIME_CONCRETE : org.bukkit.Material.RED_CONCRETE;
-        String name = ready ? "&aReady to publish: Yes" : "&cReady to publish: No";
+        org.bukkit.Material mat;
+        String name;
+        if (published) {
+            mat = org.bukkit.Material.EMERALD_BLOCK;
+            name = "&aPublished: Locked";
+        } else {
+            mat = ready ? org.bukkit.Material.LIME_CONCRETE : org.bukkit.Material.RED_CONCRETE;
+            name = ready ? "&aReady to publish: Yes" : "&cReady to publish: No";
+        }
         ItemStack it = new ItemStack(mat);
         ItemMeta meta = it.getItemMeta();
         if (meta != null) {

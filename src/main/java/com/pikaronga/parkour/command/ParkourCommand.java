@@ -295,6 +295,10 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
                     return true;
                 }
+                if (src.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("publish-locked", "&cPublished parkours cannot be renamed or edited."));
+                    return true;
+                }
                 if (parkourManager.getCourse(fresh) != null) {
                     player.sendMessage(messageManager.getMessage("rename-exists", "&cA parkour with that name already exists."));
                     return true;
@@ -346,6 +350,10 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
                     return true;
                 }
+                if (target.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("publish-locked", "&cThis parkour is already published and can no longer be edited."));
+                    return true;
+                }
                 plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), target);
                 plugin.getPlayerParkourManager().teleportToPlot(player, target);
                 player.sendMessage(messageManager.getMessage("edit-teleport", "&aTeleported to parkour &f{course}&a.", java.util.Map.of("course", target.getName())));
@@ -372,6 +380,10 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
                     return true;
                 }
+                if (target.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("publish-locked", "&cThis parkour is already published and can no longer be edited."));
+                    return true;
+                }
                 com.pikaronga.parkour.gui.SetupGUI.open(player, plugin, target);
             }
             case "psetstart", "psetend", "psetspawn", "psetcheckpoint", "psettop", "psetholotop10", "psetbest", "psetholobest", "psetcreatorholo" -> {
@@ -390,6 +402,10 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 ParkourCourse editable = parkourManager.getCourse(args[1]);
                 if (editable == null || !editable.getCreators().contains(player.getUniqueId())) {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+                    return true;
+                }
+                if (editable.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("publish-locked", "&cPublished parkours can no longer be edited."));
                     return true;
                 }
                 switch (sub) {
@@ -438,6 +454,10 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 ParkourCourse c = parkourManager.getCourse(args[1]);
                 if (c == null || !c.getCreators().contains(player.getUniqueId())) {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+                    return true;
+                }
+                if (c.isPublished()) {
+                    player.sendMessage(messageManager.getMessage("publish-locked", "&cThis parkour is already published."));
                     return true;
                 }
                 if (args.length >= 3) {
@@ -490,6 +510,8 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 } catch (Exception ignored) { }
                 c.setPublished(true);
                 plugin.getHologramManager().createHolograms(c);
+                try { plugin.getStorage().saveCourses(plugin.getParkourManager().getCourses()); } catch (Throwable ignored) {}
+                plugin.getPlayerParkourManager().handleCoursePublished(c);
                 player.sendMessage(messageManager.getMessage("publish-success", "&aPublished parkour &f{course}&a.", Map.of("course", c.getName())));
             }
             case "browse" -> {
@@ -702,12 +724,25 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean ensureCourseEditable(Player player, ParkourCourse course) {
+        if (course == null) return false;
+        if (course.isPublished()) {
+            player.sendMessage(messageManager.getMessage("publish-locked", "&cPublished parkours can no longer be edited."));
+            return false;
+        }
+        return true;
+    }
+
     private void handleSetStart(Player player, ParkourCourse course) {
         // Restrict to owner's plot region
         if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
             player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
             return;
         }
+        if (!ensureCourseEditable(player, course)) return;
+        if (!ensureCourseEditable(player, course)) return;
+        if (!ensureCourseEditable(player, course)) return;
+        if (!ensureCourseEditable(player, course)) return;
         org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Block block = getTargetPressurePlate(player);
         if (block == null) {
@@ -771,6 +806,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
             return;
         }
+        if (!ensureCourseEditable(player, course)) return;
         org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Block block = getTargetPressurePlate(player);
         if (block == null) {
@@ -818,6 +854,7 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
             return;
         }
+        if (!ensureCourseEditable(player, course)) return;
         org.bukkit.World plots = plugin.getPlayerParkourManager().getWorld();
         Location here = player.getLocation();
         if (plots == null || here.getWorld() == null || !plots.getUID().equals(here.getWorld().getUID())) {
@@ -835,6 +872,11 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSetMaxFall(Player player, ParkourCourse course, String[] args) {
+        if (!plugin.getPlayerParkourManager().isOwner(player, course)) {
+            player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
+            return;
+        }
+        if (!ensureCourseEditable(player, course)) return;
         if (args.length < 3) {
             player.sendMessage(messageManager.getMessage("setmaxfall-usage", "&cUsage: /parkour setmaxfall <name> <distance>"));
             return;

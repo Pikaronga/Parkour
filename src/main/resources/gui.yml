@@ -50,8 +50,25 @@
       rename: { slot: 6, material: ANVIL, name: "&bRename Parkour", lore: "&7Click, then type a new name in chat" }
       set-maxfall: { slot: 20, material: FEATHER, name: "&bMax Fall: &f{distance}", lore: "&7Click, then type a number in chat" }
       teleport: { slot: 22, material: COMPASS, name: "&6Teleport to Plot" }
-      publish: { slot: 23, material: LEVER, name: "&6Publish" }
-      toggle-test: { slot: 21, material: CLOCK, name: "&bToggle Test Mode" }
+      publish:
+        slot: 23
+        material: LEVER
+        name: "&6Publish"
+        lore:
+          - "&7Announce your parkour and lock editing."
+      publish-locked:
+        slot: 23
+        material: REDSTONE_TORCH
+        name: "&cPublished"
+        lore:
+          - "&7This course is already published."
+          - "&7Further edits are disabled."
+      toggle-test:
+        slot: 21
+        material: CLOCK
+        name: "&#00CED1/⚗ Toggle Test Mode/&#1E90FF"
+        lore:
+          - "&7Switch between setup and test mode."
       delete: { slot: 24, material: LAVA_BUCKET, name: "&cDelete Parkour" }
       close: { slot: 26, material: BARRIER, name: "&cClose" }
   confirm-delete:
@@ -59,6 +76,28 @@
     title: "&cDelete &f{course}&c?"
     yes: { slot: 11, material: RED_WOOL, name: "&cConfirm Delete" }
     no: { slot: 15, material: LIME_WOOL, name: "&aCancel" }
+  publish-confirm:
+    rows: 3
+    title: "&6Publish {course}?"
+    info:
+      slot: 13
+      material: BOOK
+      name: "&eBefore You Publish"
+      lore:
+        - "&7Publishing will lock all editing."
+        - "&7Test thoroughly before confirming."
+    confirm:
+      slot: 11
+      material: EMERALD_BLOCK
+      name: "&aYes, publish"
+      lore:
+        - "&7This action is final."
+    cancel:
+      slot: 15
+      material: BARRIER
+      name: "&cGo Back"
+      lore:
+        - "&7Return to setup."
   rating:
     rows: 3
     title: "&aRate: {course}"
