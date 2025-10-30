@@ -253,6 +253,11 @@ public class GUIListener implements Listener {
             int delete = plugin.getGuiConfig().slot("setup", "buttons.delete", -1);
             int close = plugin.getGuiConfig().slot("setup", "buttons.close", -1);
 
+            if (raw == rename) {
+                com.pikaronga.parkour.gui.SetupInputListener.requestRename(plugin, player, course);
+                player.closeInventory();
+                return;
+            }
             if (raw == tp) {
                 plugin.getPlayerParkourManager().setLastEditingCourse(player.getUniqueId(), course);
                 plugin.getPlayerParkourManager().teleportToPlot(player, course);
@@ -285,7 +290,6 @@ public class GUIListener implements Listener {
             else if (raw == top || raw == topd) { player.performCommand("parkour psettop " + course.getName()); refresh = true; }
             else if (raw == best || raw == bestd) { player.performCommand("parkour psetbest " + course.getName()); refresh = true; }
             else if (raw == creator || raw == creatord) { player.performCommand("parkour psetcreatorholo " + course.getName()); refresh = true; }
-            else if (raw == rename) { com.pikaronga.parkour.gui.SetupInputListener.requestRename(plugin, player, course); player.closeInventory(); return; }
             else if (raw == maxfall) { com.pikaronga.parkour.gui.SetupInputListener.requestMaxFall(plugin, player, course); player.closeInventory(); return; }
             else if (raw == toggleTest) { player.performCommand("parkour test " + course.getName()); return; }
             else if (raw == publish) { com.pikaronga.parkour.gui.PublishConfirmGUI.open(player, plugin, course); return; }

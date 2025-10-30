@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.course;
 
 import com.pikaronga.parkour.config.HologramTextProvider;
+import com.pikaronga.parkour.util.LocationUtil;
 import com.pikaronga.parkour.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -95,6 +96,16 @@ public class ParkourCourse {
     }
 
     public void addCheckpoint(Checkpoint checkpoint) {
+        if (checkpoint == null || checkpoint.plateLocation() == null) {
+            return;
+        }
+        for (int i = 0; i < checkpoints.size(); i++) {
+            Checkpoint existing = checkpoints.get(i);
+            if (existing != null && LocationUtil.isSameBlock(existing.plateLocation(), checkpoint.plateLocation())) {
+                checkpoints.set(i, checkpoint);
+                return;
+            }
+        }
         checkpoints.add(checkpoint);
     }
 

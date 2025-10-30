@@ -44,7 +44,38 @@ player-parkours:
     interval-days: 7
     winners: 3
     command: "give %player% diamond 3"
+  items:
+    restart:
+      slot: 0
+      material: "SLIME_BALL"
+      name: "&aRestart Parkour"
+      lore:
+        - "&7Return to start and reset timer"
+    checkpoint:
+      slot: 1
+      material: "ENDER_PEARL"
+      name: "&bLast Checkpoint"
+      lore:
+        - "&7Teleport back to your latest checkpoint"
+    leave:
+      slot: 8
+      material: "RED_BED"
+      name: "&cLeave Parkour"
+      lore:
+        - "&7Exit parkour mode"
+    hide:
+      slot: 2
+      visible:
+        material: "ENDER_EYE"
+        name: "&fHide Players"
+        lore:
+          - "&7Click to hide other players."
+      hidden:
+        material: "ENDER_EYE"
+        name: "&fShow Players"
+        lore:
+          - "&7Click to show other players."
 collisions:
   disable: true
 debug: false
-config-version: 1
+config-version: 2

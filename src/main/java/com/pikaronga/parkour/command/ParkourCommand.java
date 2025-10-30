@@ -295,10 +295,6 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
                     return true;
                 }
-                if (src.isPublished()) {
-                    player.sendMessage(messageManager.getMessage("publish-locked", "&cPublished parkours cannot be renamed or edited."));
-                    return true;
-                }
                 if (parkourManager.getCourse(fresh) != null) {
                     player.sendMessage(messageManager.getMessage("rename-exists", "&cA parkour with that name already exists."));
                     return true;
@@ -378,10 +374,6 @@ public class ParkourCommand implements CommandExecutor, TabCompleter {
                 }
                 if (!target.getCreators().contains(player.getUniqueId())) {
                     player.sendMessage(messageManager.getMessage("publish-not-owner", "&cYou do not own this parkour."));
-                    return true;
-                }
-                if (target.isPublished()) {
-                    player.sendMessage(messageManager.getMessage("publish-locked", "&cThis parkour is already published and can no longer be edited."));
                     return true;
                 }
                 com.pikaronga.parkour.gui.SetupGUI.open(player, plugin, target);

@@ -16,6 +16,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -74,6 +75,7 @@ public class ParkourListener implements Listener {
             switch (action) {
                 case "restart" -> sessionManager.resetToStart(event.getPlayer());
                 case "checkpoint" -> sessionManager.teleportToCheckpoint(event.getPlayer());
+                case "toggle-players" -> sessionManager.togglePlayerVisibility(event.getPlayer());
                 case "leave" -> {
                     // End session and send the player to server spawn instead of course finish
                     sessionManager.endSession(event.getPlayer(), false, false);
@@ -207,6 +209,11 @@ public class ParkourListener implements Listener {
     }
 
     @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        sessionManager.handlePlayerJoin(event.getPlayer());
+    }
+
+    @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         ParkourSession session = sessionManager.getSession(event.getPlayer());
         if (session != null && session.getLastCheckpoint() != null) {
@@ -267,3 +274,5 @@ public class ParkourListener implements Listener {
         return container.get(key, PersistentDataType.STRING);
     }
 }
+
+

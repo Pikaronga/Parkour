@@ -49,7 +49,7 @@ public class ParkourPlugin extends JavaPlugin {
         this.messageManager = new MessageManager(this);
         this.guiConfig = new GuiConfig(this);
         this.hologramTextProvider = new HologramTextProvider(this);
-        this.sessionManager = new SessionManager(this, messageManager);
+        this.sessionManager = new SessionManager(this, messageManager, configManager);
         this.hologramKey = new NamespacedKey(this, "parkour_holo_id");
         this.hologramManager = new HologramManager(this, parkourManager, hologramTextProvider, hologramKey);
 

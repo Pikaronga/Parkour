@@ -1,6 +1,7 @@
 package com.pikaronga.parkour.session;
 
 import com.pikaronga.parkour.ParkourPlugin;
+import com.pikaronga.parkour.config.ConfigManager;
 import com.pikaronga.parkour.config.MessageManager;
 import com.pikaronga.parkour.course.ParkourCourse;
 import com.pikaronga.parkour.util.TimeUtil;
@@ -9,12 +10,17 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class SessionManager {
@@ -22,12 +28,17 @@ public class SessionManager {
     private final ParkourPlugin plugin;
     private final Map<UUID, ParkourSession> sessions = new HashMap<>();
     private final NamespacedKey actionKey;
+    private final NamespacedKey toggleStateKey;
     private final MessageManager messageManager;
+    private final ConfigManager configManager;
+    private final Set<UUID> hiddenPlayers = new HashSet<>();
 
-    public SessionManager(ParkourPlugin plugin, MessageManager messageManager) {
+    public SessionManager(ParkourPlugin plugin, MessageManager messageManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.actionKey = new NamespacedKey(plugin, "parkour-action");
+        this.toggleStateKey = new NamespacedKey(plugin, "parkour-toggle-state");
         this.messageManager = messageManager;
+        this.configManager = configManager;
     }
 
     public ParkourSession startSession(Player player, ParkourCourse course) {
@@ -100,37 +111,160 @@ public class SessionManager {
 
     private void giveParkourItems(Player player) {
         player.getInventory().clear();
-        player.getInventory().setHeldItemSlot(0);
-        player.getInventory().setItem(0, createItem(
+
+        ConfigManager.HotbarItemConfig restartConfig = configManager.getHotbarItem(
+                "restart",
                 Material.SLIME_BALL,
+                0,
                 messageManager.getItemName("restart", "&aRestart Parkour"),
-                messageManager.getItemLore("restart", "&7Return to start and reset timer"),
-                "restart"));
-        player.getInventory().setItem(1, createItem(
+                defaultLoreList(messageManager.getItemLore("restart", "&7Return to start and reset timer")));
+        ConfigManager.HotbarItemConfig checkpointConfig = configManager.getHotbarItem(
+                "checkpoint",
                 Material.ENDER_PEARL,
+                1,
                 messageManager.getItemName("checkpoint", "&bLast Checkpoint"),
-                messageManager.getItemLore("checkpoint", "&7Teleport back to your latest checkpoint"),
-                "checkpoint"));
-        player.getInventory().setItem(8, createItem(
+                defaultLoreList(messageManager.getItemLore("checkpoint", "&7Teleport back to your latest checkpoint")));
+        ConfigManager.HotbarItemConfig leaveConfig = configManager.getHotbarItem(
+                "leave",
                 Material.RED_BED,
+                8,
                 messageManager.getItemName("leave", "&cLeave Parkour"),
-                messageManager.getItemLore("leave", "&7Exit parkour mode"),
-                "leave"));
+                defaultLoreList(messageManager.getItemLore("leave", "&7Exit parkour mode")));
+        ConfigManager.ToggleHotbarItemConfig hideConfig = getHideToggleConfig();
+
+        int heldSlot = resolveHeldSlot(restartConfig, checkpointConfig, leaveConfig);
+        player.getInventory().setHeldItemSlot(heldSlot);
+
+        placeHotbarItem(player, restartConfig, "restart");
+        placeHotbarItem(player, checkpointConfig, "checkpoint");
+        placeHotbarItem(player, leaveConfig, "leave");
+
+        hiddenPlayers.remove(player.getUniqueId());
+        showOthers(player);
+        updateHideItem(player, false, hideConfig);
     }
 
-    private ItemStack createItem(Material material, String name, String lore, String action) {
-        ItemStack stack = new ItemStack(material);
+    private void placeHotbarItem(Player player, ConfigManager.HotbarItemConfig config, String action) {
+        if (config == null || !config.isEnabled()) return;
+        if (config.slot() < 0 || config.slot() >= player.getInventory().getSize()) {
+            plugin.getLogger().warning("Hotbar item '" + action + "' has invalid slot " + config.slot() + "; skipping.");
+            return;
+        }
+        ItemStack item = buildActionItem(config, action);
+        if (item != null) {
+            player.getInventory().setItem(config.slot(), item);
+        }
+    }
+
+    private ItemStack buildActionItem(ConfigManager.HotbarItemConfig config, String action) {
+        if (config == null || !config.isEnabled()) return null;
+        ItemStack stack = new ItemStack(config.material());
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name);
-            meta.setLore(java.util.List.of(lore));
+            meta.setDisplayName(config.name());
+            if (config.lore() != null && !config.lore().isEmpty()) {
+                meta.setLore(config.lore());
+            }
             meta.setUnbreakable(true);
+            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_UNBREAKABLE);
             meta.getPersistentDataContainer().set(actionKey, PersistentDataType.STRING, action);
             stack.setItemMeta(meta);
         }
         return stack;
     }
 
+    private ConfigManager.ToggleHotbarItemConfig getHideToggleConfig() {
+        return configManager.getToggleHotbarItem(
+                "hide",
+                2,
+                Material.ENDER_EYE,
+                messageManager.getItemName("hide", "&fHide Players"),
+                defaultLoreList(messageManager.getItemLore("hide", "&7Click to hide other players.")),
+                Material.ENDER_EYE,
+                messageManager.getItemName("show", "&fShow Players"),
+                defaultLoreList(messageManager.getItemLore("show", "&7Click to show other players."))
+        );
+    }
+
+    private void updateHideItem(Player player, boolean hidden, ConfigManager.ToggleHotbarItemConfig toggleConfig) {
+        if (toggleConfig == null) {
+            toggleConfig = getHideToggleConfig();
+        }
+        if (toggleConfig == null || !toggleConfig.isEnabled()) {
+            return;
+        }
+        ConfigManager.HotbarItemConfig state = hidden ? toggleConfig.hiddenState() : toggleConfig.visibleState();
+        ItemStack item = buildActionItem(state, "toggle-players");
+        if (item == null) return;
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer().set(toggleStateKey, PersistentDataType.BYTE, hidden ? (byte) 1 : (byte) 0);
+            item.setItemMeta(meta);
+        }
+        if (toggleConfig.slot() >= 0 && toggleConfig.slot() < player.getInventory().getSize()) {
+            player.getInventory().setItem(toggleConfig.slot(), item);
+        }
+    }
+    private int resolveHeldSlot(ConfigManager.HotbarItemConfig... configs) {
+        if (configs != null) {
+            for (ConfigManager.HotbarItemConfig config : configs) {
+                if (config != null && config.isEnabled()) {
+                    int slot = config.slot();
+                    if (slot >= 0 && slot <= 8) {
+                        return slot;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+    private List<String> defaultLoreList(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return List.of();
+        }
+        return Arrays.stream(raw.split("\\r?\\n")).toList();
+    }
+
+    public void togglePlayerVisibility(Player player) {\n        if (getSession(player) == null) {\n            return;\n        }\n        ConfigManager.ToggleHotbarItemConfig toggleConfig = getHideToggleConfig();
+        if (toggleConfig == null || !toggleConfig.isEnabled()) {
+            return;
+        }
+        UUID id = player.getUniqueId();
+        if (hiddenPlayers.contains(id)) {
+            hiddenPlayers.remove(id);
+            showOthers(player);
+            updateHideItem(player, false, toggleConfig);
+            player.sendMessage(messageManager.getMessage("players-shown", "&aOther players are now visible."));
+        } else {
+            hiddenPlayers.add(id);
+            hideOthers(player);
+            updateHideItem(player, true, toggleConfig);
+            player.sendMessage(messageManager.getMessage("players-hidden", "&aOther players are now hidden."));
+        }
+    }
+
+    private void hideOthers(Player player) {
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.equals(player)) continue;
+            player.hidePlayer(plugin, other);
+        }
+    }
+
+    private void showOthers(Player player) {
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.equals(player)) continue;
+            player.showPlayer(plugin, other);
+        }
+    }
+
+    public void handlePlayerJoin(Player joiner) {
+        for (UUID id : hiddenPlayers) {
+            Player hider = Bukkit.getPlayer(id);
+            if (hider != null && hider.isOnline() && !hider.equals(joiner)) {
+                hider.hidePlayer(plugin, joiner);
+            }
+        }
+    }
     public NamespacedKey getActionKey() {
         return actionKey;
     }
@@ -158,6 +292,12 @@ public class SessionManager {
 
     private void endSession(ParkourSession session, boolean completed, boolean teleportToFinish) {
         session.restoreInventory();
+        Player player = session.getPlayer();
+        if (player != null) {
+            if (hiddenPlayers.remove(player.getUniqueId())) {
+                showOthers(player);
+            }
+        }
         if (completed) {
             long durationNanos = System.nanoTime() - session.getStartTimeNanos();
             session.getPlayer().sendMessage(messageManager.getMessage("completed-parkour", "&aParkour completed in &e{time}&a!", java.util.Map.of("time", TimeUtil.formatDuration(durationNanos))));
@@ -313,3 +453,17 @@ public class SessionManager {
         Bukkit.getScheduler().runTask(plugin, () -> player.teleport(target));
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

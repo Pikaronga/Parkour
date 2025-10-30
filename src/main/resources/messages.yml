@@ -68,6 +68,8 @@ messages:
   setcreatorholo-usage: "&cUsage: /parkour setcreatorholo <name>"
   setstaffdiff-usage: "&cUsage: /parkour setstaffdiff <name> <1-5>"
   setstaffdiff-success: "&aSet staff difficulty for &f{course}&a to &f{value}&a."
+  players-hidden: "&eOther players are now hidden."
+  players-shown: "&eOther players are now visible."
   rewards-given: "&aIssued rewards to top &f{count}&a parkours."
   pedit-usage: "&cUsage: /parkour <psetstart|psetend|psetspawn|psetcheckpoint> <name>"
   edit-usage: "&cUsage: /parkour edit <name>"
@@ -86,4 +88,10 @@ items:
   leave:
     name: "&cLeave Parkour"
     lore: "&7Exit parkour mode"
-config-version: 1
+  hide:
+    name: "&fHide Players"
+    lore: "&7Click to hide other players."
+  show:
+    name: "&fShow Players"
+    lore: "&7Click to show other players."
+config-version: 2
