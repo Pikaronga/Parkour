@@ -10,6 +10,7 @@ com\pikaronga\parkour\config\MessageManager.class
 com\pikaronga\parkour\util\ParkourManager.class
 com\pikaronga\parkour\hologram\PersonalBestHologram.class
 com\pikaronga\parkour\util\RenameUtil.class
+com\pikaronga\parkour\config\ConfigManager$ToggleHotbarItemConfig.class
 com\pikaronga\parkour\config\ConfigMigrator.class
 com\pikaronga\parkour\gui\SetupInputListener.class
 com\pikaronga\parkour\gui\GUIListener$GuiState.class
@@ -42,6 +43,7 @@ com\pikaronga\parkour\storage\DatabaseManager.class
 com\pikaronga\parkour\util\ParkourManager$CheckpointMatch.class
 com\pikaronga\parkour\gui\AdminParkoursGUI.class
 com\pikaronga\parkour\gui\RatingGUIListener.class
+com\pikaronga\parkour\config\ConfigManager$HotbarItemConfig.class
 com\pikaronga\parkour\session\ParkourSession.class
 com\pikaronga\parkour\player\PlotWorldListener$1.class
 com\pikaronga\parkour\player\BuildProtectionListener.class

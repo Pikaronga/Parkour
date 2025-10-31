@@ -225,7 +225,12 @@ public class SessionManager {
         return Arrays.stream(raw.split("\\r?\\n")).toList();
     }
 
-    public void togglePlayerVisibility(Player player) {\n        if (getSession(player) == null) {\n            return;\n        }\n        ConfigManager.ToggleHotbarItemConfig toggleConfig = getHideToggleConfig();
+    public void togglePlayerVisibility(Player player) {
+        if (getSession(player) == null) {
+            player.sendMessage(messageManager.getMessage("not-in-parkour", "&cYou are not in a parkour."));
+            return;
+        }
+        ConfigManager.ToggleHotbarItemConfig toggleConfig = getHideToggleConfig();
         if (toggleConfig == null || !toggleConfig.isEnabled()) {
             return;
         }
